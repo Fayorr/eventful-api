@@ -1,0 +1,51 @@
+import Event, { IEvent } from './event.model';
+import redisClient from '../../config/redis';
+
+const CACHE_EXPIRATION = 3600; // Cache for 1 hour
+
+export const createEvent = async (data: Partial<IEvent>, creatorId: string) => {
+	const event = await Event.create({ ...data, creator: creatorId });
+
+	// Clear the cache whenever a new event is added
+	await redisClient.del('events:all');
+
+	return event;
+};
+
+export const getAllEvents = async () => {
+	// 1. Check Cache
+	const cachedEvents = await redisClient.get('events:all');
+	if (cachedEvents) {
+		return JSON.parse(cachedEvents);
+	}
+
+	// 2. If Cache Miss, Hit Database
+	const events = await Event.find()
+		.populate('creator', 'name email')
+		.sort({ date: 1 });
+
+	// 3. Set Cache for future requests
+	await redisClient.setEx(
+		'events:all',
+		CACHE_EXPIRATION,
+		JSON.stringify(events),
+	);
+
+	return events;
+};
+
+export const getEventById = async (eventId: string) => {
+	const cacheKey = `event:${eventId}`;
+	const cachedEvent = await redisClient.get(cacheKey);
+
+	if (cachedEvent) {
+		return JSON.parse(cachedEvent);
+	}
+
+	const event = await Event.findById(eventId).populate('creator', 'name email');
+	if (!event) throw new Error('Event not found');
+
+	await redisClient.setEx(cacheKey, CACHE_EXPIRATION, JSON.stringify(event));
+
+	return event;
+};
