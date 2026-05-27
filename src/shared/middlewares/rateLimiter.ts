@@ -8,6 +8,7 @@ export const globalLimiter = rateLimit({
 	max: 100,
 	standardHeaders: true,
 	legacyHeaders: false,
+	requestPropertyName: 'globalRateLimit',
 	store: new RedisStore({
 		sendCommand: (...args: string[]) => redisClient.sendCommand(args),
 	}),
@@ -20,8 +21,11 @@ export const globalLimiter = rateLimit({
 
 // Stricter rate limiter for authentication routes
 export const authLimiter = rateLimit({
-	windowMs: 60 * 1000, // 1 minute
-	max: 5, // 5 attempts per minute
+	windowMs: 60 * 1000,
+	max: 100, // (Kept at 10 for your local testing)
+	standardHeaders: true,
+	legacyHeaders: false,
+	requestPropertyName: 'authRateLimit',
 	store: new RedisStore({
 		sendCommand: (...args: string[]) => redisClient.sendCommand(args),
 	}),

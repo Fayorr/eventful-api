@@ -4,7 +4,7 @@ info:
   description: AltSchool Backend Engineering Capstone Project
   version: 1.0.0
 servers:
-  - url: http://localhost:5000/api/v1
+  - url: http://localhost:5001/api/v1
     description: Local Development Server
 
 components:
@@ -15,6 +15,7 @@ components:
       bearerFormat: JWT
 
 paths:
+  # ================= AUTHENTICATION =================
   /auth/register:
     post:
       summary: Register a new user
@@ -25,37 +26,46 @@ paths:
           application/json:
             schema:
               type: object
-              required:
-                - name
-                - email
-                - password
+              required: [name, email, password]
               properties:
-                name:
-                  type: string
-                email:
-                  type: string
-                password:
-                  type: string
-                role:
-                  type: string
-                  enum: [creator, eventee]
+                name: { type: string }
+                email: { type: string }
+                password: { type: string }
+                role: { type: string, enum: [creator, eventee] }
       responses:
-        '201':
-          description: User registered successfully
+        '201': { description: User registered successfully }
+        '400': { description: Bad Request }
 
+  /auth/login:
+    post:
+      summary: Login a user
+      tags: [Authentication]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                email: { type: string }
+                password: { type: string }
+      responses:
+        '200': { description: Login successful }
+        '401': { description: Invalid credentials }
+
+  # ================= EVENTS =================
   /events:
     get:
       summary: Get all events (Cached)
       tags: [Events]
       responses:
-        '200':
-          description: A list of events
+        '200': { description: A list of events }
           
     post:
       summary: Create a new event
       tags: [Events]
-      security:
-        - bearerAuth: []
+      security: [{ bearerAuth: [] }]
       requestBody:
         required: true
         content:
@@ -63,23 +73,97 @@ paths:
             schema:
               type: object
               properties:
-                title:
-                  type: string
-                description:
-                  type: string
-                date:
-                  type: string
-                  format: date-time
-                location:
-                  type: string
-                price:
-                  type: number
-                capacity:
-                  type: number
+                title: { type: string }
+                description: { type: string }
+                date: { type: string, format: date-time }
+                location: { type: string }
+                price: { type: number }
+                capacity: { type: number }
       responses:
-        '201':
-          description: Event created successfully
-        '401':
-          description: Unauthorized
-        '403':
-          description: Forbidden (Not a creator)
+        '201': { description: Event created successfully }
+        '403': { description: Forbidden (Not a creator) }
+
+  /events/{id}:
+    get:
+      summary: Get a specific event by ID
+      tags: [Events]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      responses:
+        '200': { description: Event details }
+        '404': { description: Event not found }
+
+  /events/{id}/share:
+    get:
+      summary: Get social share links for an event
+      tags: [Events]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      responses:
+        '200': { description: Share links generated }
+
+  # ================= TICKETS & PAYMENTS =================
+  /tickets/buy/{eventId}:
+    post:
+      summary: Initialize ticket purchase (Paystack)
+      tags: [Tickets]
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - in: path
+          name: eventId
+          required: true
+          schema: { type: string }
+      responses:
+        '200': { description: Payment initialized (Returns Paystack URL) }
+        '400': { description: Event sold out or invalid }
+
+  /tickets/verify/{reference}:
+    get:
+      summary: Verify Paystack payment & Generate QR Code Ticket
+      tags: [Tickets]
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - in: path
+          name: reference
+          required: true
+          schema: { type: string }
+      responses:
+        '201': { description: Ticket and QR Code generated }
+        '400': { description: Payment verification failed }
+
+  /payments/history:
+    get:
+      summary: Get creator payment and revenue history
+      tags: [Payments]
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200': { description: Payment ledger retrieved }
+        '403': { description: Forbidden }
+
+  # ================= ANALYTICS =================
+  /analytics/global:
+    get:
+      summary: Get all-time analytics for a creator
+      tags: [Analytics]
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200': { description: Global stats retrieved }
+
+  /analytics/event/{eventId}:
+    get:
+      summary: Get analytics for a specific event
+      tags: [Analytics]
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - in: path
+          name: eventId
+          required: true
+          schema: { type: string }
+      responses:
+        '200': { description: Event stats retrieved }

@@ -1,20 +1,22 @@
-import app from './app';
-import mongoose from 'mongoose';
 import dotenv from 'dotenv';
+import connectDB from './config/db';
+import { connectRedis } from './config/redis';
 
 dotenv.config();
 
-const PORT = process.env.PORT || 5000;
-const MONGO_URI = process.env.MONGO_URI || 'mongodb://localhost:27017/eventful';
+const PORT = process.env.PORT || 5001;
 
 const startServer = async () => {
 	try {
-		// Connect to Database
-		await mongoose.connect(MONGO_URI);
-		console.log('✅ Database connected successfully');
+		// 1. Connect to Infrastructure FIRST
+		await connectDB();
+		await connectRedis();
 
-		// Initialize Redis connection here later
+		// 2. Import the Express app ONLY AFTER Redis is fully connected.
+		// We use 'require' here to dynamically load it at runtime instead of at the top of the file.
+		const app = require('./app').default;
 
+		// 3. Start listening for traffic
 		app.listen(PORT, () => {
 			console.log(`🚀 Server running on port ${PORT}`);
 		});
