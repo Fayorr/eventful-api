@@ -3,6 +3,7 @@ import Event from '../events/event.model';
 import { paystack } from '../../config/paystack';
 import { generateQRCode } from '../../shared/utils/qrGenerator';
 import mongoose from 'mongoose';
+import { scheduleReminder } from '../notifications/queue.service';
 
 export const initializeTicketPurchase = async (eventId: string, user: any) => {
 	const event = await Event.findById(eventId);
@@ -44,7 +45,7 @@ export const initializeTicketPurchase = async (eventId: string, user: any) => {
 		authorization_url: paymentData.authorization_url,
 		reference: paymentData.reference,
 	};
-};;;
+};
 
 export const verifyAndGenerateTicket = async (reference: string) => {
 	// 1. Check if ticket already exists for this reference
@@ -64,14 +65,42 @@ export const verifyAndGenerateTicket = async (reference: string) => {
 	return await generateTicket(eventId, userId, reference);
 };
 
+export const markTicketAsScanned = async (
+	reference: string,
+	creatorId: string,
+) => {
+	// Find the ticket and populate the event to check ownership
+	const ticket = await Ticket.findOne({ paymentReference: reference }).populate(
+		'event',
+	);
+
+	if (!ticket) throw new Error('Ticket not found');
+	if (ticket.isScanned) throw new Error('Ticket has already been scanned!');
+
+	// Ensure the person scanning is the actual creator of the event
+	const event: any = ticket.event;
+	if (event.creator.toString() !== creatorId) {
+		throw new Error('Unauthorized: You are not the creator of this event');
+	}
+
+	// Mark as scanned
+	ticket.isScanned = true;
+	await ticket.save();
+
+	return {
+		eventTitle: event.title,
+		ticketId: ticket._id,
+	};
+};
+
 // Helper function to create the ticket and update event capacity
 const generateTicket = async (
 	eventId: string,
 	userId: string,
 	reference: string,
 ) => {
-	// Generate a unique string for the QR code payload
-	const qrPayload = JSON.stringify({ eventId, userId, reference });
+	const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:5173';
+	const qrPayload = `${FRONTEND_URL}/scan/${reference}`;
 	const qrCodeUrl = await generateQRCode(qrPayload);
 
 	const ticket = await Ticket.create({
@@ -85,4 +114,36 @@ const generateTicket = async (
 	await Event.findByIdAndUpdate(eventId, { $inc: { ticketsSold: 1 } });
 
 	return ticket;
+};
+export const setPersonalReminder = async (
+	ticketId: string,
+	userId: string,
+	delayInHours: number,
+) => {
+	const ticket = await Ticket.findOne({
+		_id: ticketId,
+		eventee: userId,
+	}).populate('event');
+	if (!ticket) throw new Error('Ticket not found or unauthorized');
+
+	const event: any = ticket.event;
+	const eventDate = new Date(event.date);
+
+	// Calculate the exact date/time the email should be sent
+	const reminderTime = new Date(
+		eventDate.getTime() - delayInHours * 60 * 60 * 1000,
+	);
+
+	if (reminderTime.getTime() < Date.now()) {
+		throw new Error('This reminder time has already passed!');
+	}
+
+	// Fetch the user to get their email
+	const User = mongoose.model('User');
+	const user = await User.findById(userId);
+
+	// Add it to the BullMQ Queue
+	await scheduleReminder(user!.email, event.title, reminderTime);
+
+	return { scheduledFor: reminderTime };
 };

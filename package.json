@@ -23,6 +23,7 @@
 		"qrcode": "^1.5.3",
 		"rate-limit-redis": "^4.2.0",
 		"redis": "^4.6.10",
+		"resend": "^6.12.4",
 		"supertest": "^7.2.2",
 		"swagger-ui-express": "^5.0.0",
 		"yamljs": "^0.3.0"
