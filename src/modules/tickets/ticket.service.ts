@@ -2,6 +2,7 @@ import Ticket from './ticket.model';
 import Event from '../events/event.model';
 import { paystack } from '../../config/paystack';
 import { generateQRCode } from '../../shared/utils/qrGenerator';
+import mongoose from 'mongoose';
 
 export const initializeTicketPurchase = async (eventId: string, user: any) => {
 	const event = await Event.findById(eventId);
@@ -16,21 +17,34 @@ export const initializeTicketPurchase = async (eventId: string, user: any) => {
 		return await generateTicket(eventId, user.id, `FREE_${Date.now()}`);
 	}
 
+	// 👈 2. Fetch the full user from the database to guarantee we have their email
+	const User = mongoose.model('User');
+	const fullUser = await User.findById(user.id);
+
+	if (!fullUser || !fullUser.email) {
+		throw new Error('User email is required for payment');
+	}
+
+	// Define where Paystack should redirect the user after paying
+	const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:5173';
+	const callbackUrl = `${FRONTEND_URL}/payment/verify`;
+
 	// Initialize Paystack payment for paid events
 	const paymentData = await paystack.initializePayment(
-		user.email,
+		fullUser.email,
 		event.price,
 		{
 			eventId,
 			userId: user.id,
 		},
+		callbackUrl,
 	);
 
 	return {
 		authorization_url: paymentData.authorization_url,
 		reference: paymentData.reference,
 	};
-};
+};;;
 
 export const verifyAndGenerateTicket = async (reference: string) => {
 	// 1. Check if ticket already exists for this reference

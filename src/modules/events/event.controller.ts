@@ -29,10 +29,11 @@ export const getEvent = async (req: Request, res: Response) => {
 	}
 };
 
-export const getShareLinks = async (req: Request, res: Response) => {
+export const even = async (req: Request, res: Response) => {
 	try {
 		const event = await eventService.getEventById(req.params.id);
-		const eventUrl = `https://eventful.com/events/${event._id}`; // Replace with your actual frontend URL
+		const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:5173';
+		const eventUrl = `${FRONTEND_URL}/checkout/${event._id}`;
 		const text = `Check out this amazing event: ${event.title}!`;
 
 		const shareLinks = {
@@ -40,6 +41,7 @@ export const getShareLinks = async (req: Request, res: Response) => {
 			twitter: `https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}&url=${encodeURIComponent(eventUrl)}`,
 			facebook: `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(eventUrl)}`,
 			linkedin: `https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(eventUrl)}`,
+			copyUrl: `${eventUrl}`
 		};
 
 		res.status(200).json({ status: 'success', data: shareLinks });

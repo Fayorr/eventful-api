@@ -1,20 +1,20 @@
 import QRCode from 'qrcode';
+import cloudinary from '../../config/cloudinary';
 
-/**
- * Generates a Base64 QR Code string from the provided data.
- * @param data - The string data to encode (e.g., a ticket ID and signature)
- */
-export const generateQRCode = async (data: string): Promise<string> => {
+export const generateQRCode = async (payload: string): Promise<string> => {
 	try {
-		const qrDataUrl = await QRCode.toDataURL(data, {
-			errorCorrectionLevel: 'H', // High error correction for reliable scanning
-			type: 'image/png',
-			margin: 1,
-			width: 300,
+		// 1. Generate the raw Base64 string of the QR Code
+		const qrCodeData = await QRCode.toDataURL(payload);
+
+		// 2. Upload that raw data directly to Cloudinary
+		const uploadResponse = await cloudinary.uploader.upload(qrCodeData, {
+			folder: 'eventful_tickets', // Creates a clean folder in your Cloudinary account
 		});
-		return qrDataUrl;
+
+		// 3. Return the secure URL so ticket.service.ts can save it to MongoDB
+		return uploadResponse.secure_url;
 	} catch (error) {
-		console.error('QR Code Generation Error:', error);
-		throw new Error('Failed to generate QR Code');
+		console.error('Cloudinary QR Upload Error:', error);
+		throw new Error('Failed to generate and store ticket QR code');
 	}
 };

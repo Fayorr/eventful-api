@@ -2,14 +2,19 @@ import dotenv from 'dotenv';
 
 dotenv.config();
 
-const PAYSTACK_SECRET_KEY = process.env.PAYSTACK_SECRET_KEY as string;
+const PAYSTACK_SECRET_KEY =
+	process.env.PAYSTACK_SECRET || (process.env.PAYSTACK_SECRET_KEY as string);
 const PAYSTACK_BASE_URL = 'https://api.paystack.co';
 
 export const paystack = {
 	/**
 	 * Initializes a transaction with Paystack
 	 */
-	async initializePayment(email: string, amount: number, metadata: any) {
+	async initializePayment(email: string, amount: number, metadata: any, callback_url: string) {
+		if (!PAYSTACK_SECRET_KEY) {
+			throw new Error('Paystack secret key is not configured');
+		}
+
 		const response = await fetch(
 			`${PAYSTACK_BASE_URL}/transaction/initialize`,
 			{
@@ -20,7 +25,8 @@ export const paystack = {
 				},
 				body: JSON.stringify({
 					email,
-					amount: amount * 100, // Paystack expects amount in kobo/cents
+					amount: amount * 100,
+					callback_url,
 					metadata,
 				}),
 			},
