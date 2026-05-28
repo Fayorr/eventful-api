@@ -39,12 +39,18 @@ export const loginUser = async (data: Partial<IUser>) => {
 };
 
 const generateToken = (user: IUser) => {
+	const expiresIn = '2d';
 	const token = jwt.sign({ id: user._id, role: user.role }, JWT_SECRET, {
-		expiresIn: '1d',
+		expiresIn,
 	});
+
+	// Calculate expiry timestamp
+	const expiryTime = new Date();
+	expiryTime.setDate(expiryTime.getDate() + 2); // 1 day from now
 
 	return {
 		user: { id: user._id, name: user.name, email: user.email, role: user.role },
 		token,
+		expiresAt: expiryTime.toISOString(),
 	};
 };
