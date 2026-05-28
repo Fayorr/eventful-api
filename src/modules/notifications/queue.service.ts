@@ -1,22 +1,12 @@
 // src/modules/notifications/queue.service.ts
 import { Queue } from 'bullmq';
 import dotenv from 'dotenv';
+import { createBullMQConnection } from '../../config/redis';
 
 dotenv.config();
 
-// Parse Redis URL for BullMQ connection
-const redisUrl = process.env.REDIS_URL || 'redis://localhost:6379';
-const url = new URL(redisUrl);
-const redisHost = url.hostname || 'localhost';
-const redisPort = parseInt(url.port || '6379', 10);
-const redisPassword = url.password || undefined;
-
 export const reminderQueue = new Queue('event-reminders', {
-	connection: {
-		host: redisHost,
-		port: redisPort,
-		password: redisPassword,
-	},
+	connection: createBullMQConnection(), //  dedicated connection
 });
 
 // Helper function to schedule a reminder

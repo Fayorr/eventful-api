@@ -1,6 +1,7 @@
 // src/modules/notifications/worker.service.ts
 import { Worker } from 'bullmq';
 import dotenv from 'dotenv';
+import { createBullMQConnection } from '../../config/redis';
 import { sendEventReminderEmail } from './email.service';
 
 dotenv.config();
@@ -23,10 +24,6 @@ export const reminderWorker = new Worker(
 		await sendEventReminderEmail(email, eventTitle);
 	},
 	{
-		connection: {
-			host: redisHost,
-			port: redisPort,
-			password: redisPassword,
-		},
+		connection: createBullMQConnection(),
 	},
 );

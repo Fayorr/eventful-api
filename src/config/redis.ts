@@ -3,26 +3,32 @@ import dotenv from 'dotenv';
 
 dotenv.config();
 
-const redisClient = new Redis(
-	process.env.REDIS_URL || 'redis://127.0.0.1:6379',
-	{
-		// 1. CRITICAL FOR BULLMQ: Prevents the 20-retry crash
-		maxRetriesPerRequest: null,
+const REDIS_URL = process.env.REDIS_URL || 'redis://127.0.0.1:6379';
 
-		// 2. Tells Redis to send a heartbeat so Upstash doesn't drop the connection for being "idle"
-		keepAlive: 10000,
+// 1. Create a strict, shared options object
+const redisOptions = {
+	maxRetriesPerRequest: null, // Absolutely required by BullMQ
+	enableReadyCheck: false,
+	keepAlive: 10000,
+	// CRITICAL FOR UPSTASH: Prevents the ECONNRESET TLS drop
+	tls: REDIS_URL.startsWith('rediss://')
+		? { rejectUnauthorized: false }
+		: undefined,
+};
 
-		// 3. If the connection does drop, this tells it exactly how to reconnect
-		retryStrategy(times) {
-			const delay = Math.min(times * 50, 2000);
-			return delay;
-		},
-	},
-);
+// 2. The main client for standard caching (your event.service.ts)
+const redisClient = new Redis(REDIS_URL, redisOptions);
 
 redisClient.on('error', (err) => console.error('❌ Redis Client Error', err));
-redisClient.on('connect', () => console.log('✅ Redis connected successfully'));
-redisClient.on('reconnecting', () => console.log('🔄 Redis reconnecting...'));
+redisClient.on('connect', () =>
+	console.log('✅ Main Redis connected successfully'),
+);
+
+// 3. EXPORT A DEDICATED BUILDER FOR BULLMQ
+// BullMQ needs its own isolated connections so it doesn't overwrite options
+export const createBullMQConnection = () => {
+	return new Redis(REDIS_URL, redisOptions);
+};
 
 export const connectRedis = async () => {
 	try {
