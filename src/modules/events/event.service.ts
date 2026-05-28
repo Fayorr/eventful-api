@@ -36,7 +36,7 @@ export const getAllEvents = async () => {
 
 	// 3. Set Cache for future requests
 	try {
-		await redisClient.setEx(
+		await redisClient.setex(
 			'events:all',
 			CACHE_EXPIRATION,
 			JSON.stringify(events),
@@ -66,7 +66,7 @@ export const getEventById = async (eventId: string) => {
 	if (!event) throw new Error('Event not found');
 
 	try {
-		await redisClient.setEx(cacheKey, CACHE_EXPIRATION, JSON.stringify(event));
+		await redisClient.setex(cacheKey, CACHE_EXPIRATION, JSON.stringify(event));
 	} catch (cacheError) {
 		console.warn('Redis cache set error:', cacheError);
 		// Continue without caching if Redis fails
