@@ -1,17 +1,11 @@
 import rateLimit from 'express-rate-limit';
-import RedisStore from 'rate-limit-redis';
-import redisClient from '../../config/redis';
 
-// Global rate limiter: 100 requests per 15 minutes per IP
+// Global rate limiter: 15 requests per 15 minutes per IP
 export const globalLimiter = rateLimit({
 	windowMs: 15 * 60 * 1000,
-	max: 100,
+	max: 15,
 	standardHeaders: true,
 	legacyHeaders: false,
-	requestPropertyName: 'globalRateLimit',
-	store: new RedisStore({
-		sendCommand: (...args: string[]) => redisClient.sendCommand(args),
-	}),
 	message: {
 		status: 'error',
 		message:
@@ -22,13 +16,9 @@ export const globalLimiter = rateLimit({
 // Stricter rate limiter for authentication routes
 export const authLimiter = rateLimit({
 	windowMs: 60 * 1000,
-	max: 100, // (Kept at 10 for your local testing)
+	max: 5,
 	standardHeaders: true,
 	legacyHeaders: false,
-	requestPropertyName: 'authRateLimit',
-	store: new RedisStore({
-		sendCommand: (...args: string[]) => redisClient.sendCommand(args),
-	}),
 	message: {
 		status: 'error',
 		message: 'Too many login attempts, please try again after a minute',

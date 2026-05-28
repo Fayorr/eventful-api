@@ -4,6 +4,8 @@ info:
   description: AltSchool Backend Engineering Capstone Project
   version: 1.0.0
 servers:
+  - url: https://eventful-api.hostless.app/api/v1
+    description: Production Server
   - url: http://localhost:5001/api/v1
     description: Local Development Server
 
@@ -136,6 +138,43 @@ paths:
       responses:
         '201': { description: Ticket and QR Code generated }
         '400': { description: Payment verification failed }
+
+  /tickets/scan/{reference}:
+    post:
+      summary: Scan and validate an attendee's ticket
+      tags: [Tickets]
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - in: path
+          name: reference
+          required: true
+          schema: { type: string }
+      responses:
+        '200': { description: Ticket verified and attendee admitted }
+        '400': { description: Invalid scan or ticket already used }
+        '403': { description: Unauthorized (Not the event creator) }
+
+  /tickets/{ticketId}/reminder:
+    post:
+      summary: Set a personal email reminder for an event
+      tags: [Tickets]
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - in: path
+          name: ticketId
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                delayInHours: { type: number }
+      responses:
+        '200': { description: Reminder scheduled successfully }
+        '400': { description: Invalid ticket or time already passed }
 
   /payments/history:
     get:
