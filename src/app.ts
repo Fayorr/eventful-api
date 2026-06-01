@@ -17,14 +17,34 @@ const app: Application = express();
 
 // Security and Parsing Middlewares
 app.use(helmet());
-app.use(cors());
+
+// CORS Configuration
+const allowedOrigins = [
+	process.env.FRONTEND_URL || 'http://localhost:5173',
+	'http://localhost:3000',
+];
+
+app.use(
+	cors({
+		origin: (origin, callback) => {
+			if (!origin || allowedOrigins.includes(origin)) {
+				callback(null, true);
+			} else {
+				callback(new Error('Not allowed by CORS'));
+			}
+		},
+		credentials: true,
+		methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
+		allowedHeaders: ['Content-Type', 'Authorization'],
+	}),
+);
+
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 // Swagger Documentation
 const swaggerDocument = YAML.load(path.join(__dirname, '../swagger.yaml'));
 app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerDocument));
-
 
 app.use(globalLimiter);
 
@@ -40,7 +60,6 @@ app.use('/api/v1/events', eventRoutes);
 app.use('/api/v1/tickets', ticketRoutes);
 app.use('/api/v1/payments', paymentRoutes);
 app.use('/api/v1/analytics', analyticsRoutes);
-
 
 app.use(errorHandler);
 
