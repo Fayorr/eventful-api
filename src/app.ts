@@ -15,6 +15,9 @@ import analyticsRoutes from './modules/analytics/analytics.route';
 
 const app: Application = express();
 
+// Trust proxy for rate limiting and X-Forwarded-For headers in production
+app.set('trust proxy', process.env.NODE_ENV === 'production' ? 1 : 0);
+
 // Security and Parsing Middlewares
 app.use(helmet());
 
@@ -25,12 +28,16 @@ const allowedOrigins = [
 		'http://localhost:5173',
 ];
 
+console.log('✅ CORS allowed origins:', allowedOrigins);
+
 app.use(
 	cors({
 		origin: (origin, callback) => {
+			console.log('📍 CORS request from origin:', origin);
 			if (!origin || allowedOrigins.includes(origin)) {
 				callback(null, true);
 			} else {
+				console.warn('❌ CORS blocked origin:', origin);
 				callback(new Error('Not allowed by CORS'));
 			}
 		},
@@ -60,6 +67,23 @@ app.use('/api/v1/events', eventRoutes);
 app.use('/api/v1/tickets', ticketRoutes);
 app.use('/api/v1/payments', paymentRoutes);
 app.use('/api/v1/analytics', analyticsRoutes);
+
+// 404 Handler - Debug endpoint
+app.use((req: Request, res: Response) => {
+	console.log(`❌ 404 - ${req.method} ${req.path}`);
+	res.status(404).json({
+		status: 'error',
+		message: `Endpoint not found: ${req.method} ${req.path}`,
+		availableEndpoints: [
+			'GET /health',
+			'POST /api/v1/auth/login',
+			'POST /api/v1/auth/register',
+			'GET /api/v1/events',
+			'POST /api/v1/events',
+			'GET /api/v1/tickets',
+		],
+	});
+});
 
 app.use(errorHandler);
 
