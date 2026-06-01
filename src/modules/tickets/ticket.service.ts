@@ -27,7 +27,10 @@ export const initializeTicketPurchase = async (eventId: string, user: any) => {
 	}
 
 	// Define where Paystack should redirect the user after paying
-	const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:5173';
+	const FRONTEND_URL =
+		process.env.FRONTEND_URL ||
+		'https://eventfulapp-api.vercel.app' ||
+		'http://localhost:5173';
 	const callbackUrl = `${FRONTEND_URL}/payment/verify`;
 
 	// Initialize Paystack payment for paid events
@@ -99,7 +102,7 @@ const generateTicket = async (
 	userId: string,
 	reference: string,
 ) => {
-	const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:5173';
+	const FRONTEND_URL = process.env.FRONTEND_URL || 'https://eventfulapp-api.vercel.app' || 'http://localhost:5173';
 	const qrPayload = `${FRONTEND_URL}/scan/${reference}`;
 	const qrCodeUrl = await generateQRCode(qrPayload);
 
