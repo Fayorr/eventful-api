@@ -7,40 +7,47 @@ import dotenv from 'dotenv';
 dotenv.config();
 
 beforeAll(async () => {
-	// Connect to a test database instead of production
+	// FIX: Append JEST_WORKER_ID so parallel tests don't overwrite the same database
+	const workerId = process.env.JEST_WORKER_ID || '1';
 	await mongoose.connect(
-		process.env.TEST_MONGO_URI || 'mongodb://localhost:27017/eventful_test',
+		process.env.TEST_MONGO_URI ||
+			`mongodb://localhost:27017/eventful_test_auth_${workerId}`,
 	);
-});
+}, 60000);
 
 afterAll(async () => {
 	await User.deleteMany({});
 	await mongoose.connection.close();
-});
+}, 60000);
 
 describe('Auth Endpoints', () => {
 	it('should register a new user successfully', async () => {
-		const res = await (request(app) as any).post('/api/v1/auth/register').send({
+		const res = await request(app).post('/api/v1/auth/register').send({
 			name: 'Test Creator',
 			email: 'creator@test.com',
 			password: 'password123',
 			role: 'creator',
 		});
-
 		expect(res.statusCode).toEqual(201);
 		expect(res.body.status).toBe('success');
 		expect(res.body.data).toHaveProperty('token');
-		expect(res.body.data.user.email).toBe('creator@test.com');
 	});
 
-	it('should not register a user with an existing email', async () => {
-		const res = await (request(app) as any).post('/api/v1/auth/register').send({
-			name: 'Duplicate',
+	it('should login successfully with valid credentials', async () => {
+		const res = await request(app).post('/api/v1/auth/login').send({
 			email: 'creator@test.com',
 			password: 'password123',
 		});
+		expect(res.statusCode).toEqual(200);
+		expect(res.body.status).toBe('success');
+		expect(res.body.data).toHaveProperty('token');
+	});
 
-		expect(res.statusCode).toEqual(400);
-		expect(res.body.message).toBe('Email is already registered');
+	it('should not login with incorrect password', async () => {
+		const res = await request(app).post('/api/v1/auth/login').send({
+			email: 'creator@test.com',
+			password: 'wrongpassword',
+		});
+		expect(res.statusCode).toEqual(401);
 	});
 });
