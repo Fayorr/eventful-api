@@ -3,7 +3,6 @@ import mongoose from 'mongoose';
 import app from '../src/app';
 import Event from '../src/modules/events/event.model';
 import User from '../src/modules/auth/user.model';
-import redisClient from '../src/config/redis';
 import dotenv from 'dotenv';
 
 dotenv.config();
@@ -18,16 +17,14 @@ beforeAll(async () => {
 			`mongodb://localhost:27017/eventful_test_events_${workerId}`,
 	);
 
-	if (redisClient.status !== 'ready') {
-		await redisClient.connect();
-	}
-
-	const creatorRes = await request(app).post('/api/v1/auth/register').send({
-		name: 'Event Creator',
-		email: 'creator_events@test.com',
-		password: 'password123',
-		role: 'creator',
-	});
+	const creatorRes = await request(app)
+		.post('/api/v1/auth/register')
+		.send({
+			name: 'Event Creator',
+			email: `event_creator_${workerId}@test.com`,
+			password: 'password123',
+			role: 'creator',
+		});
 	creatorToken = creatorRes.body.data.token;
 }, 60000);
 
@@ -35,7 +32,6 @@ afterAll(async () => {
 	await Event.deleteMany({});
 	await User.deleteMany({});
 	await mongoose.connection.close();
-	if (redisClient.status === 'ready') await redisClient.quit();
 }, 60000);
 
 describe('Event Endpoints', () => {

@@ -48,22 +48,26 @@ beforeAll(async () => {
 	);
 
 	// Setup Creator
-	const creatorRes = await request(app).post('/api/v1/auth/register').send({
-		name: 'Creator',
-		email: 'c@test.com',
-		password: 'pass',
-		role: 'creator',
-	});
+	const creatorRes = await request(app)
+		.post('/api/v1/auth/register')
+		.send({
+			name: 'Ticket Creator',
+			email: `ticket_creator_${workerId}@test.com`,
+			password: 'pass',
+			role: 'creator',
+		});
 	creatorToken = creatorRes.body.data.token;
 	creatorId = creatorRes.body.data.user.id;
 
 	// Setup Attendee
-	const attendeeRes = await request(app).post('/api/v1/auth/register').send({
-		name: 'Attendee',
-		email: 'a@test.com',
-		password: 'pass',
-		role: 'attendee',
-	});
+	const attendeeRes = await request(app)
+		.post('/api/v1/auth/register')
+		.send({
+			name: 'Ticket Attendee',
+			email: `ticket_attendee_${workerId}@test.com`,
+			password: 'pass',
+			role: 'eventee',
+		});
 	attendeeToken = attendeeRes.body.data.token;
 	attendeeId = attendeeRes.body.data.user.id;
 

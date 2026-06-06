@@ -3,7 +3,6 @@ import mongoose from 'mongoose';
 import app from '../src/app';
 import User from '../src/modules/auth/user.model';
 import dotenv from 'dotenv';
-import { describe, it } from 'node:test';
 
 dotenv.config();
 let creatorToken: string;
@@ -19,7 +18,7 @@ beforeAll(async () => {
 		.post('/api/v1/auth/register')
 		.send({
 			name: 'Finance Creator',
-			email: 'fin@test.com',
+			email: `finance_creator_${workerId}@test.com`,
 			password: 'pass',
 			role: 'creator',
 		});
@@ -43,15 +42,9 @@ describe('Payments Ledger Endpoints', () => {
 		expect(res.body.data).toHaveProperty('transactions');
 	});
 });
-// function beforeAll(arg0: () => Promise<void>, arg1: number) {
-//     throw new Error('Function not implemented.');
-// }
-
-// function afterAll(arg0: () => Promise<void>) {
 //     throw new Error('Function not implemented.');
 // }
 
 // function expect(statusCode: number) {
 //     throw new Error('Function not implemented.');
 // }
-
