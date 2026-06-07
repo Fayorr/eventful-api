@@ -37,7 +37,7 @@ export const verifyEmail = async (req: Request, res: Response) => {
 			});
 		}
 
-		// Mark as verified and clean up the database
+		
 		user.isEmailVerified = true;
 		user.emailVerificationToken = undefined;
 		user.emailVerificationExpires = undefined;

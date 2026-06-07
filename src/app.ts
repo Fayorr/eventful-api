@@ -26,20 +26,18 @@ const allowedOrigins = [
 	process.env.FRONTEND_URL,
 	'https://eventfulapp-api.vercel.app',
 	'http://localhost:5173',
-].filter(Boolean); // This removes the env variable from the list if it's undefined
+].filter(Boolean); 
 
-// You can keep this log because it only runs ONCE when the server starts
 console.log('✅ CORS allowed origins:', allowedOrigins);
 
 app.use(
 	cors({
 		origin: (origin, callback) => {
-			// 2. REMOVED: console.log('📍 CORS request from origin:', origin);
 
 			if (!origin || allowedOrigins.includes(origin)) {
 				callback(null, true);
 			} else {
-				// 3. KEPT: Only log when something goes wrong
+		
 				console.warn(`❌ CORS blocked origin: ${origin}`);
 				callback(new Error('Not allowed by CORS'));
 			}
