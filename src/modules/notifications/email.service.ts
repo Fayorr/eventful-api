@@ -11,7 +11,7 @@ export const sendEventReminderEmail = async (
 ) => {
 	try {
 		const data = await resend.emails.send({
-			from: 'Eventful <onboarding@resend.dev>', // In production, change this to your verified domain
+			from: 'Eventful <onboarding@fayokunmiosho.com>',
 			to: email,
 			subject: `Upcoming Event Reminder: ${eventTitle}`,
 			html: `
@@ -29,6 +29,44 @@ export const sendEventReminderEmail = async (
 		return data;
 	} catch (error) {
 		console.error(`[Resend] Failed to send email:`, error);
+		throw error;
+	}
+};
+// Add this below your existing event reminder email function
+export const sendVerificationEmail = async (
+	email: string,
+	name: string,
+	token: string,
+) => {
+	const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:5173';
+	const verifyLink = `${FRONTEND_URL}/verify-email/${token}`;
+
+	try {
+		// 1. Capture both data and error from Resend
+		const { data, error } = await resend.emails.send({
+			from: 'Eventful <onboarding@fayokunmiosho.com>',
+			to: email,
+			subject: 'Welcome to Eventful! Please verify your email',
+			html: `
+                <div style="font-family: sans-serif; padding: 20px;">
+                    <h2>Hi ${name}, welcome to Eventful!</h2>
+                    <p>We're excited to have you. Please verify your email address by clicking the button below:</p>
+                    <a href="${verifyLink}" style="display: inline-block; padding: 10px 20px; margin-top: 20px; background-color: #10b981; color: white; text-decoration: none; border-radius: 5px;">
+                        Verify My Account
+                    </a>
+                </div>
+            `,
+		});
+
+		// 3. Manually throw if Resend returns an error object
+		if (error) {
+			console.error('[Resend API Error]:', error);
+			throw new Error(error.message);
+		}
+
+		console.log(`[Resend] Verification email sent to ${email}`);
+	} catch (error) {
+		console.error(`[Resend] Failed to send verification email:`, error);
 		throw error;
 	}
 };

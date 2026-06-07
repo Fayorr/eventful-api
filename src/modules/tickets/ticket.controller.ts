@@ -81,3 +81,16 @@ export const setPersonalReminder = async (req: AuthRequest, res: Response) => {
 		res.status(400).json({ status: 'error', message: error.message });
 	}
 };
+
+export const getMyTickets = async (req: AuthRequest, res: Response) => {
+	try {
+		const tickets = await ticketService.getMyTickets(req.user.id);
+
+		res.status(200).json({
+			status: 'success',
+			data: tickets,
+		});
+	} catch (error: any) {
+		res.status(500).json({ status: 'error', message: error.message });
+	}
+};

@@ -4,6 +4,7 @@ import {
 	scanTicket,
 	verifyPayment,
 	setPersonalReminder,
+	getMyTickets,
 } from './ticket.controller';
 import { authorize, protect } from '../../shared/middlewares/auth.middleware';
 
@@ -19,5 +20,8 @@ router.get('/verify/:reference', protect, verifyPayment);
 router.post('/scan/:reference', protect, authorize('creator'), scanTicket);
 
 router.post('/:ticketId/reminder', protect, setPersonalReminder);
+
+
+router.get('/my-tickets', protect, getMyTickets);
 
 export default router;

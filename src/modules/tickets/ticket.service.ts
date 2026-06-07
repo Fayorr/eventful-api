@@ -102,7 +102,10 @@ const generateTicket = async (
 	userId: string,
 	reference: string,
 ) => {
-	const FRONTEND_URL = process.env.FRONTEND_URL || 'https://eventfulapp-api.vercel.app' || 'http://localhost:5173';
+	const FRONTEND_URL =
+		process.env.FRONTEND_URL ||
+		'https://eventfulapp-api.vercel.app' ||
+		'http://localhost:5173';
 	const qrPayload = `${FRONTEND_URL}/scan/${reference}`;
 	const qrCodeUrl = await generateQRCode(qrPayload);
 
@@ -149,4 +152,12 @@ export const setPersonalReminder = async (
 	await scheduleReminder(user!.email, event.title, reminderTime);
 
 	return { scheduledFor: reminderTime };
+};
+
+export const getMyTickets = async (userId: string) => {
+	const tickets = await Ticket.find({ eventee: userId })
+		.populate('event', 'title description date location price')
+		.sort({ createdAt: -1 }); // Newest first
+
+	return tickets;
 };
