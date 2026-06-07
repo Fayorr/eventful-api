@@ -38,7 +38,8 @@ export const sendVerificationEmail = async (
 	name: string,
 	token: string,
 ) => {
-	const FRONTEND_URL = process.env.FRONTEND_URL;
+	const FRONTEND_URL =
+		process.env.FRONTEND_URL || 'https://eventfulapp-api.vercel.app';
 	const verifyLink = `${FRONTEND_URL}/verify-email/${token}`;
 
 	try {

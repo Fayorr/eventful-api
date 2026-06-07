@@ -104,8 +104,8 @@ const generateTicket = async (
 ) => {
 	const FRONTEND_URL =
 		process.env.FRONTEND_URL ||
-		'https://eventfulapp-api.vercel.app' ||
-		'http://localhost:5173';
+		'https://eventfulapp-api.vercel.app'
+
 	const qrPayload = `${FRONTEND_URL}/scan/${reference}`;
 	const qrCodeUrl = await generateQRCode(qrPayload);
 
