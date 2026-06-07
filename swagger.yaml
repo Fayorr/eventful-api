@@ -35,7 +35,7 @@ paths:
                 password: { type: string }
                 role: { type: string, enum: [creator, eventee] }
       responses:
-        '201': { description: User registered successfully }
+        '201': { description: User registered successfully (Returns verification message, requires email verification to login) }
         '400': { description: Bad Request }
 
   /auth/login:
@@ -55,6 +55,19 @@ paths:
       responses:
         '200': { description: Login successful }
         '401': { description: Invalid credentials }
+
+  /auth/verify-email/{token}:
+    get:
+      summary: Verify a user's email address via token
+      tags: [Authentication]
+      parameters:
+        - in: path
+          name: token
+          required: true
+          schema: { type: string }
+      responses:
+        '200': { description: Email verified successfully }
+        '400': { description: Invalid or expired verification token }
 
   # ================= EVENTS =================
   /events:
@@ -111,6 +124,15 @@ paths:
         '200': { description: Share links generated }
 
   # ================= TICKETS & PAYMENTS =================
+  /tickets/my-tickets:
+    get:
+      summary: Get all tickets purchased by the authenticated attendee
+      tags: [Tickets]
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200': { description: List of tickets populated with event details }
+        '401': { description: Unauthorized (Missing or invalid token) }
+
   /tickets/buy/{eventId}:
     post:
       summary: Initialize ticket purchase (Paystack)
