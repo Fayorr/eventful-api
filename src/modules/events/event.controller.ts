@@ -33,7 +33,7 @@ export const even = async (req: Request, res: Response) => {
 	try {
 		const event = await eventService.getEventById(req.params.id);
 		const FRONTEND_URL =
-			process.env.FRONTEND_URL || 'https://eventfulapp-api.vercel.app' || 'http://localhost:5173';
+			process.env.FRONTEND_URL || 'https://eventfulapp-api.vercel.app';
 		const eventUrl = `${FRONTEND_URL}/checkout/${event._id}`;
 		const text = `Check out this amazing event: ${event.title}!`;
 

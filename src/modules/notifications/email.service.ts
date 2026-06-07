@@ -38,7 +38,7 @@ export const sendVerificationEmail = async (
 	name: string,
 	token: string,
 ) => {
-	const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:5173';
+	const FRONTEND_URL = process.env.FRONTEND_URL;
 	const verifyLink = `${FRONTEND_URL}/verify-email/${token}`;
 
 	try {

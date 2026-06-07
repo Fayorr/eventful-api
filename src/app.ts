@@ -25,7 +25,7 @@ app.use(helmet());
 const allowedOrigins = [
 	process.env.FRONTEND_URL,
 	'https://eventfulapp-api.vercel.app',
-	'http://localhost:5173',
+	// 'http://localhost:5173',
 ].filter(Boolean); 
 
 console.log('✅ CORS allowed origins:', allowedOrigins);
