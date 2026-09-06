@@ -30,39 +30,36 @@ the business data is portable.
 
 ## Supabase setup
 
-1. Create a Supabase project and enable **Confirm Email** under Authentication →
-   Sign In / Providers → Email.
+The hosted `eventful` project is provisioned in Fayo's Supabase team at
+`https://pqxaxfrlffldahvxlvov.supabase.co`. Its V2 schema, indexes, RLS, and
+least-privilege API role have already been applied.
+
+1. Keep **Confirm Email** enabled under Authentication → Sign In / Providers →
+   Email. The API also refuses login until Supabase reports the address as
+   confirmed.
 2. Set the Supabase Site URL to `https://eventfulapp-api.vercel.app` and add both
    `https://eventfulapp-api.vercel.app/verify-email` and
    `http://localhost:5173/verify-email` to Redirect URLs.
 3. Configure custom SMTP with Resend for production confirmation emails. The
    Supabase development sender is intentionally limited.
-4. Following Supabase's Prisma guide, create a dedicated Prisma database role in
-   the SQL editor (replace the password):
-
-   ```sql
-   create user "prisma" with password 'GENERATE_A_STRONG_PASSWORD' bypassrls createdb;
-   grant "prisma" to "postgres";
-   grant usage, create on schema public to "prisma";
-   grant all on all tables in schema public to "prisma";
-   grant all on all sequences in schema public to "prisma";
-   alter default privileges in schema public grant all on tables to "prisma";
-   alter default privileges in schema public grant all on sequences to "prisma";
-   ```
-
-5. Copy `.env.example` to `.env` and use the Supavisor session-pooler URL (port
-   5432) for `DATABASE_URL`. Do not use transaction mode for migrations.
-6. Apply and generate the database client:
+4. Copy `.env.example` to `.env` and use the server-only `eventful_api` role with
+   the Supavisor session-pooler URL (port 5432) for `DATABASE_URL`.
+5. Install dependencies and generate the Prisma client:
 
    ```bash
    npm install
-   npm run db:migrate
    npm run db:generate
+   npm run db:validate
    ```
 
-The migration enables RLS on every public table and revokes browser roles. This
-API uses a dedicated server-only Prisma role and performs authorization in the
-service layer. Never expose that database URL or a Supabase secret/service-role
+Schema changes are applied with Supabase migration tooling using an administrative
+connection; the matching SQL is kept in `prisma/migrations` for review and source
+control. Do not run migrations with `DATABASE_URL`: the runtime role deliberately
+has only CRUD access and cannot create or alter database objects.
+
+Every public table has RLS enabled and browser-role grants are revoked. The API
+uses the dedicated server-only role and performs authorization in the service
+layer. Never expose `DATABASE_URL`, its password, or a Supabase secret/service-role
 key to the web app.
 
 ## Run locally

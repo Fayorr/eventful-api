@@ -132,6 +132,8 @@ model Reminder {
   ticket Ticket? @relation(fields: [ticketId], references: [id], onDelete: Cascade)
 
   @@unique([eventId, userId, scheduledFor])
+  @@index([userId])
+  @@index([ticketId])
   @@index([status, scheduledFor])
   @@map("reminders")
 }
