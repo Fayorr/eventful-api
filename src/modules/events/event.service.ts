@@ -2,6 +2,7 @@ import { Prisma, ReminderStatus } from '@prisma/client';
 import { z } from 'zod';
 import prisma from '../../config/prisma';
 import redisClient from '../../config/redis';
+import { FRONTEND_URL } from '../../config/urls';
 import { AppError } from '../../shared/errors/AppError';
 import { scheduleReminder } from '../notifications/queue.service';
 
@@ -186,11 +187,7 @@ export const getEventAttendees = async (eventId: string, creatorId: string) => {
 
 export const getShareLinks = async (eventId: string) => {
 	const event = await getEventById(eventId);
-	const baseUrl = (process.env.FRONTEND_URL || 'http://localhost:5173').replace(
-		/\/$/,
-		'',
-	);
-	const eventUrl = `${baseUrl}/events/${event.id}`;
+	const eventUrl = `${FRONTEND_URL}/events/${event.id}`;
 	const text = `Check out ${event.title} on Eventful`;
 	return {
 		whatsapp: `https://api.whatsapp.com/send?text=${encodeURIComponent(`${text} ${eventUrl}`)}`,

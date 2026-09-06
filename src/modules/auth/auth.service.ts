@@ -2,6 +2,7 @@ import { UserRole } from '@prisma/client';
 import { z } from 'zod';
 import prisma from '../../config/prisma';
 import { createSupabaseClient } from '../../config/supabase';
+import { FRONTEND_URL } from '../../config/urls';
 import { AppError } from '../../shared/errors/AppError';
 
 const registerSchema = z.object({
@@ -15,9 +16,6 @@ const loginSchema = z.object({
 	email: z.email().transform((email) => email.toLowerCase()),
 	password: z.string().min(1),
 });
-
-const frontendUrl = () =>
-	(process.env.FRONTEND_URL || 'http://localhost:5173').replace(/\/$/, '');
 
 const toApiRole = (role: UserRole) => role.toLowerCase() as 'creator' | 'eventee';
 
@@ -50,7 +48,7 @@ export const registerUser = async (input: unknown) => {
 		email: data.email,
 		password: data.password,
 		options: {
-			emailRedirectTo: `${frontendUrl()}/verify-email`,
+			emailRedirectTo: `${FRONTEND_URL}/verify-email`,
 			data: { name: data.name },
 		},
 	});
@@ -138,7 +136,7 @@ export const resendVerification = async (input: unknown) => {
 	const { error } = await createSupabaseClient().auth.resend({
 		type: 'signup',
 		email,
-		options: { emailRedirectTo: `${frontendUrl()}/verify-email` },
+		options: { emailRedirectTo: `${FRONTEND_URL}/verify-email` },
 	});
 
 	if (error) throw authError(error.message);

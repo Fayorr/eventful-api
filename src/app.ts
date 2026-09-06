@@ -4,6 +4,7 @@ import helmet from 'helmet';
 import path from 'path';
 import swaggerUi from 'swagger-ui-express';
 import YAML from 'yamljs';
+import { CORS_ORIGINS } from './config/urls';
 import analyticsRoutes from './modules/analytics/analytics.route';
 import authRoutes from './modules/auth/auth.route';
 import eventRoutes from './modules/events/event.route';
@@ -17,15 +18,10 @@ app.set('trust proxy', process.env.NODE_ENV === 'production' ? 1 : 0);
 app.disable('x-powered-by');
 app.use(helmet());
 
-const allowedOrigins = (
-	process.env.CORS_ORIGINS || process.env.FRONTEND_URL || 'http://localhost:5173'
-)
-	.split(',')
-	.map((origin) => origin.trim().replace(/\/$/, ''));
 app.use(
 	cors({
 		origin: (origin, callback) => {
-			if (!origin || allowedOrigins.includes(origin.replace(/\/$/, ''))) {
+			if (!origin || CORS_ORIGINS.includes(origin.replace(/\/$/, ''))) {
 				callback(null, true);
 				return;
 			}

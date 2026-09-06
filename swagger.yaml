@@ -4,6 +4,8 @@ info:
   version: 2.0.0
   description: PostgreSQL and Supabase Auth edition of the Eventful ticketing API.
 servers:
+  - url: https://eventful-api.hostless.app/api/v2
+    description: Production
   - url: http://localhost:5001/api/v2
     description: Local development
 components:

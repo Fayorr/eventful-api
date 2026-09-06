@@ -3,6 +3,7 @@ import { PaymentStatus, Prisma } from '@prisma/client';
 import { z } from 'zod';
 import prisma from '../../config/prisma';
 import { paystack, PaystackVerification } from '../../config/paystack';
+import { FRONTEND_URL } from '../../config/urls';
 import { AppError } from '../../shared/errors/AppError';
 import { generateQRCode } from '../../shared/utils/qrGenerator';
 import { scheduleReminder } from '../notifications/queue.service';
@@ -18,11 +19,7 @@ const publicTicket = <T extends { qrTokenHash: string }>(ticket: T) => {
 const createQr = async () => {
 	const token = crypto.randomBytes(32).toString('base64url');
 	const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
-	const baseUrl = (process.env.FRONTEND_URL || 'http://localhost:5173').replace(
-		/\/$/,
-		'',
-	);
-	const qrCodeUrl = await generateQRCode(`${baseUrl}/scan/${token}`);
+	const qrCodeUrl = await generateQRCode(`${FRONTEND_URL}/scan/${token}`);
 	return { tokenHash, qrCodeUrl };
 };
 
@@ -118,9 +115,7 @@ export const initializeTicketPurchase = async (
 			eventeeId: user.id,
 		},
 	});
-	const callbackUrl = `${(
-		process.env.FRONTEND_URL || 'http://localhost:5173'
-	).replace(/\/$/, '')}/payment/verify`;
+	const callbackUrl = `${FRONTEND_URL}/payment/verify`;
 
 	try {
 		const initialized = await paystack.initializePayment(

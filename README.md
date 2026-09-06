@@ -5,6 +5,11 @@ Supabase Auth. It supports creator and eventee roles, confirmed-email login,
 Paystack checkout, one-time QR admission, reminders, Redis caching, creator
 payment ledgers, and event analytics.
 
+- Production frontend: <https://eventfulapp-api.vercel.app>
+- Production backend: <https://eventful-api.hostless.app>
+- Production API base URL: <https://eventful-api.hostless.app/api/v2>
+- Production Swagger UI: <https://eventful-api.hostless.app/api-docs>
+
 ## Why Supabase rather than Neon?
 
 Both provide excellent managed PostgreSQL. Neon is especially strong when a team
@@ -27,8 +32,9 @@ the business data is portable.
 
 1. Create a Supabase project and enable **Confirm Email** under Authentication →
    Sign In / Providers → Email.
-2. Configure the Site URL and add `http://localhost:5173/verify-email` plus your
-   production equivalent to Redirect URLs.
+2. Set the Supabase Site URL to `https://eventfulapp-api.vercel.app` and add both
+   `https://eventfulapp-api.vercel.app/verify-email` and
+   `http://localhost:5173/verify-email` to Redirect URLs.
 3. Configure custom SMTP with Resend for production confirmation emails. The
    Supabase development sender is intentionally limited.
 4. Following Supabase's Prisma guide, create a dedicated Prisma database role in
@@ -74,6 +80,9 @@ npm run worker:dev
 
 Swagger UI is at `http://localhost:5001/api-docs`; health is at `/health`, and V2
 routes are under `/api/v2`.
+
+For local frontend callbacks, override `FRONTEND_URL=http://localhost:5173` in
+your local `.env`. Production defaults to `https://eventfulapp-api.vercel.app`.
 
 ## Quality checks
 
