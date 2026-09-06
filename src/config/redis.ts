@@ -1,43 +1,29 @@
-import { Redis } from 'ioredis';
-import dotenv from 'dotenv';
+import { Redis, RedisOptions } from 'ioredis';
 
-dotenv.config();
+const redisUrl = process.env.REDIS_URL || 'redis://127.0.0.1:6379';
 
-const REDIS_URL = process.env.REDIS_URL || 'redis://127.0.0.1:6379';
-
-// 1. Create a strict, shared options object
-const redisOptions = {
-	maxRetriesPerRequest: null, // Absolutely required by BullMQ
+const sharedOptions: RedisOptions = {
+	maxRetriesPerRequest: null,
 	enableReadyCheck: false,
-	keepAlive: 10000,
-	// CRITICAL FOR UPSTASH: Prevents the ECONNRESET TLS drop
-	tls: REDIS_URL.startsWith('rediss://')
-		? { rejectUnauthorized: false }
-		: undefined,
+	keepAlive: 10_000,
+	lazyConnect: true,
 };
 
-// 2. The main client for standard caching (your event.service.ts)
-const redisClient = new Redis(REDIS_URL, redisOptions);
+const redisClient = new Redis(redisUrl, sharedOptions);
 
-redisClient.on('error', (err) => console.error('❌ Redis Client Error', err));
-redisClient.on('connect', () =>
-	console.log('✅ Main Redis connected successfully'),
+redisClient.on('error', (error) =>
+	console.error('❌ Redis client error:', error.message),
 );
 
-// 3. EXPORT A DEDICATED BUILDER FOR BULLMQ
-// BullMQ needs its own isolated connections so it doesn't overwrite options
-export const createBullMQConnection = () => {
-	return new Redis(REDIS_URL, redisOptions);
-};
+export const createBullMQConnection = () =>
+	new Redis(redisUrl, { ...sharedOptions, lazyConnect: false });
 
 export const connectRedis = async () => {
-	try {
-		await redisClient.ping();
-		console.log('✅ Redis connection verified');
-	} catch (error) {
-		console.error('❌ Redis connection failed:', error);
-		throw error;
-	}
+	if (redisClient.status === 'wait') await redisClient.connect();
+	await redisClient.ping();
+	console.log('✅ Redis connected');
 };
+
+export const disconnectRedis = () => redisClient.quit();
 
 export default redisClient;

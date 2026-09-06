@@ -1,15 +1,27 @@
 import { Router } from 'express';
-import { createEvent, getEvents, getEvent, even as getShareLinks } from './event.controller';
-import { protect, authorize } from '../../shared/middlewares/auth.middleware';
+import {
+	createEvent,
+	getAttendees,
+	getEvent,
+	getEvents,
+	getMyEvents,
+	shareEvent,
+} from './event.controller';
+import { authorize, protect } from '../../shared/middlewares/auth.middleware';
+import { catchAsync } from '../../shared/utils/catchAsync';
 
 const router = Router();
 
-// Public routes (Optionally protect this if only logged-in users can browse)
-router.get('/', getEvents);
-router.get('/:id', getEvent);
-router.get('/:id/share', getShareLinks);
-
-// Protected routes (Creators only)
-router.post('/', protect, authorize('creator'), createEvent);
+router.get('/', catchAsync(getEvents));
+router.get('/mine', protect, authorize('creator'), catchAsync(getMyEvents));
+router.post('/', protect, authorize('creator'), catchAsync(createEvent));
+router.get('/:id/share', catchAsync(shareEvent));
+router.get(
+	'/:id/attendees',
+	protect,
+	authorize('creator'),
+	catchAsync(getAttendees),
+);
+router.get('/:id', catchAsync(getEvent));
 
 export default router;

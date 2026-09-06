@@ -1,96 +1,52 @@
 import { Response } from 'express';
-import * as ticketService from './ticket.service';
 import { AuthRequest } from '../../shared/middlewares/auth.middleware';
+import * as ticketService from './ticket.service';
+
+const param = (value: string | string[]) =>
+	Array.isArray(value) ? value[0] : value;
 
 export const buyTicket = async (req: AuthRequest, res: Response) => {
-	try {
-		const { eventId } = req.params;
-		const result = await ticketService.initializeTicketPurchase(
-			eventId,
-			req.user,
-		);
-
-		res.status(200).json({
-			status: 'success',
-			message: 'Payment initialized',
-			data: result,
-		});
-	} catch (error: any) {
-		res.status(400).json({ status: 'error', message: error.message });
-	}
+	const data = await ticketService.initializeTicketPurchase(
+		param(req.params.eventId),
+		req.user!,
+	);
+	res.status(data.kind === 'ticket' ? 201 : 200).json({ status: 'success', data });
 };
 
 export const verifyPayment = async (req: AuthRequest, res: Response) => {
-	try {
-		const { reference } = req.params;
-		const ticket = await ticketService.verifyAndGenerateTicket(reference);
-
-		res.status(201).json({
-			status: 'success',
-			message: 'Ticket generated successfully',
-			data: ticket,
-		});
-	} catch (error: any) {
-		res.status(400).json({ status: 'error', message: error.message });
-	}
+	const ticket = await ticketService.verifyAndGenerateTicket(
+		param(req.params.reference),
+		req.user!.id,
+	);
+	res.status(201).json({
+		status: 'success',
+		message: 'Ticket generated successfully.',
+		data: ticket,
+	});
 };
 
 export const scanTicket = async (req: AuthRequest, res: Response) => {
-	try {
-		const { reference } = req.params;
-		// req.user.id comes from your JWT token
-		const result = await ticketService.markTicketAsScanned(
-			reference,
-			req.user.id,
-		);
-
-		res.status(200).json({
-			status: 'success',
-			message: 'Ticket verified and attendee admitted!',
-			data: result,
-		});
-	} catch (error: any) {
-		res.status(400).json({ status: 'error', message: error.message });
-	}
+	const data = await ticketService.markTicketAsScanned(
+		param(req.params.token),
+		req.user!.id,
+	);
+	res.status(200).json({
+		status: 'success',
+		message: 'Ticket verified; attendee admitted.',
+		data,
+	});
 };
 
 export const setPersonalReminder = async (req: AuthRequest, res: Response) => {
-	try {
-		const { ticketId } = req.params;
-		const { delayInHours } = req.body;
-
-		if (!delayInHours || delayInHours < 0) {
-			return res.status(400).json({
-				status: 'error',
-				message: 'delayInHours is required and must be non-negative',
-			});
-		}
-
-		const result = await ticketService.setPersonalReminder(
-			ticketId,
-			req.user.id,
-			delayInHours,
-		);
-
-		res.status(200).json({
-			status: 'success',
-			message: 'Reminder scheduled successfully',
-			data: result,
-		});
-	} catch (error: any) {
-		res.status(400).json({ status: 'error', message: error.message });
-	}
+	const data = await ticketService.setPersonalReminder(
+		param(req.params.ticketId),
+		req.user!.id,
+		req.body.hoursBefore ?? req.body.delayInHours,
+	);
+	res.status(201).json({ status: 'success', data });
 };
 
 export const getMyTickets = async (req: AuthRequest, res: Response) => {
-	try {
-		const tickets = await ticketService.getMyTickets(req.user.id);
-
-		res.status(200).json({
-			status: 'success',
-			data: tickets,
-		});
-	} catch (error: any) {
-		res.status(500).json({ status: 'error', message: error.message });
-	}
+	const tickets = await ticketService.getMyTickets(req.user!.id);
+	res.status(200).json({ status: 'success', data: tickets });
 };

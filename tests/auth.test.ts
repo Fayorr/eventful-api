@@ -1,53 +1,58 @@
-import request from 'supertest';
-import mongoose from 'mongoose';
-import app from '../src/app';
-import User from '../src/modules/auth/user.model';
-import dotenv from 'dotenv';
+const profile = {
+	findUnique: jest.fn(),
+	create: jest.fn(),
+};
+const signUp = jest.fn();
+const signInWithPassword = jest.fn();
+const refreshSession = jest.fn();
+const resend = jest.fn();
 
-dotenv.config();
+jest.mock('../src/config/prisma', () => ({
+	__esModule: true,
+	default: { profile },
+}));
+jest.mock('../src/config/supabase', () => ({
+	createSupabaseClient: () => ({
+		auth: { signUp, signInWithPassword, refreshSession, resend },
+	}),
+}));
 
-beforeAll(async () => {
-	// FIX: Append JEST_WORKER_ID so parallel tests don't overwrite the same database
-	const workerId = process.env.JEST_WORKER_ID || '1';
-	await mongoose.connect(
-		process.env.TEST_MONGO_URI ||
-			`mongodb://localhost:27017/eventful_test_auth_${workerId}`,
-	);
-}, 60000);
+import { loginUser, registerUser } from '../src/modules/auth/auth.service';
 
-afterAll(async () => {
-	await User.deleteMany({});
-	await mongoose.connection.close();
-}, 60000);
+describe('auth service', () => {
+	beforeEach(() => jest.clearAllMocks());
 
-describe('Auth Endpoints', () => {
-	it('should register a new user successfully', async () => {
-		const res = await request(app).post('/api/v1/auth/register').send({
-			name: 'Test Creator',
-			email: 'creator@test.com',
-			password: 'password123',
-			role: 'creator',
+	it('registers without creating a session before email confirmation', async () => {
+		profile.findUnique.mockResolvedValue(null);
+		signUp.mockResolvedValue({ data: { user: { id: 'user-id' } }, error: null });
+		profile.create.mockResolvedValue({
+			id: 'user-id',
+			name: 'Ada Lovelace',
+			email: 'ada@example.com',
+			role: 'EVENTEE',
 		});
-		expect(res.statusCode).toEqual(201);
-		expect(res.body.status).toBe('success');
-		expect(res.body.data).toHaveProperty('token');
+
+		const result = await registerUser({
+			name: 'Ada Lovelace',
+			email: 'ADA@example.com',
+			password: 'correct-horse-battery-staple',
+			role: 'eventee',
+		});
+
+		expect(result).not.toHaveProperty('token');
+		expect(result.message).toMatch(/confirm/i);
+		expect(signUp).toHaveBeenCalledWith(
+			expect.objectContaining({ email: 'ada@example.com' }),
+		);
 	});
 
-	it('should login successfully with valid credentials', async () => {
-		const res = await request(app).post('/api/v1/auth/login').send({
-			email: 'creator@test.com',
-			password: 'password123',
+	it('blocks login when Supabase reports an unconfirmed email', async () => {
+		signInWithPassword.mockResolvedValue({
+			data: { session: null, user: null },
+			error: { message: 'Email not confirmed' },
 		});
-		expect(res.statusCode).toEqual(200);
-		expect(res.body.status).toBe('success');
-		expect(res.body.data).toHaveProperty('token');
-	});
-
-	it('should not login with incorrect password', async () => {
-		const res = await request(app).post('/api/v1/auth/login').send({
-			email: 'creator@test.com',
-			password: 'wrongpassword',
-		});
-		expect(res.statusCode).toEqual(401);
+		await expect(
+			loginUser({ email: 'ada@example.com', password: 'password' }),
+		).rejects.toMatchObject({ statusCode: 403, code: 'EMAIL_NOT_CONFIRMED' });
 	});
 });

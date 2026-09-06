@@ -1,27 +1,34 @@
-// src/modules/notifications/queue.service.ts
 import { Queue } from 'bullmq';
-import dotenv from 'dotenv';
 import { createBullMQConnection } from '../../config/redis';
 
-dotenv.config();
-
 export const reminderQueue = new Queue('event-reminders', {
-	connection: createBullMQConnection(), //  dedicated connection
+	connection: createBullMQConnection(),
 });
 
-// Helper function to schedule a reminder
-export const scheduleReminder = async (
-	email: string,
-	eventTitle: string,
-	sendAtDate: Date,
-) => {
-	const delay = sendAtDate.getTime() - Date.now(); // Calculate milliseconds from now
-
-	if (delay > 0) {
-		await reminderQueue.add(
-			'send-email',
-			{ email, eventTitle }, // The payload the worker will need
-			{ delay }, // BullMQ will wait this long before processing
-		);
-	}
+export const scheduleReminder = async (input: {
+	reminderId: string;
+	email: string;
+	eventTitle: string;
+	sendAt: Date;
+}) => {
+	const delay = input.sendAt.getTime() - Date.now();
+	if (delay <= 0) throw new Error('Reminder time must be in the future');
+	const jobId = `reminder-${input.reminderId}`;
+	await reminderQueue.add(
+		'send-email',
+		{
+			reminderId: input.reminderId,
+			email: input.email,
+			eventTitle: input.eventTitle,
+		},
+		{
+			delay,
+			jobId,
+			attempts: 5,
+			backoff: { type: 'exponential', delay: 30_000 },
+			removeOnComplete: 500,
+			removeOnFail: 1_000,
+		},
+	);
+	return jobId;
 };

@@ -1,81 +1,146 @@
-import bcrypt from 'bcryptjs';
-import crypto from 'crypto';
-import { sendVerificationEmail } from '../notifications/email.service';
-import jwt from 'jsonwebtoken';
-import User, { IUser } from './user.model';
+import { UserRole } from '@prisma/client';
+import { z } from 'zod';
+import prisma from '../../config/prisma';
+import { createSupabaseClient } from '../../config/supabase';
+import { AppError } from '../../shared/errors/AppError';
 
-const JWT_SECRET = process.env.JWT_SECRET || 'supersecretfallback';
+const registerSchema = z.object({
+	name: z.string().trim().min(2).max(100),
+	email: z.email().transform((email) => email.toLowerCase()),
+	password: z.string().min(8).max(72),
+	role: z.enum(['creator', 'eventee']).default('eventee'),
+});
 
-export const registerUser = async (data: Partial<IUser>) => {
-	const existingUser = await User.findOne({ email: data.email });
-	if (existingUser) {
-		throw new Error('Email is already registered');
-	}
+const loginSchema = z.object({
+	email: z.email().transform((email) => email.toLowerCase()),
+	password: z.string().min(1),
+});
 
-	const salt = await bcrypt.genSalt(10);
-	const hashedPassword = await bcrypt.hash(data.password as string, salt);
+const frontendUrl = () =>
+	(process.env.FRONTEND_URL || 'http://localhost:5173').replace(/\/$/, '');
 
-	// 1. Generate a secure random token for email verification
-	const verificationToken = crypto.randomBytes(32).toString('hex');
+const toApiRole = (role: UserRole) => role.toLowerCase() as 'creator' | 'eventee';
 
-	// 2. Set expiration for 24 hours from now
-	const tokenExpires = new Date(Date.now() + 24 * 60 * 60 * 1000);
-
-	// 3. Create the user with the new verification fields
-	const user = await User.create({
-		...data,
-		password: hashedPassword,
-		emailVerificationToken: verificationToken,
-		emailVerificationExpires: tokenExpires,
-	});
-
-	// 4. Send the verification email via Resend
-	await sendVerificationEmail(user.email, user.name, verificationToken);
-
-	// 5. Return success message INSTEAD of logging them in with a JWT
-	return {
-		message:
-			'Registration successful! Please check your email to verify your account.',
-	};
-};
-
-export const loginUser = async (data: Partial<IUser>) => {
-	const user = await User.findOne({ email: data.email }).select('+password');
-	if (!user) {
-		throw new Error('Invalid credentials');
-	}
-
-	// 🛑 BLOCK LOGIN IF NOT VERIFIED
-	if (!user.isEmailVerified) {
-		throw new Error(
-			'Please verify your email address before logging in. Check your inbox!',
+const authError = (message: string) => {
+	if (/email not confirmed/i.test(message)) {
+		return new AppError(
+			'Please confirm your email address before logging in.',
+			403,
+			'EMAIL_NOT_CONFIRMED',
 		);
 	}
-
-	const isMatch = await bcrypt.compare(
-		data.password as string,
-		user.password as string,
-	);
-	if (!isMatch) {
-		throw new Error('Invalid credentials');
+	if (/invalid login credentials/i.test(message)) {
+		return new AppError('Invalid email or password.', 401, 'INVALID_CREDENTIALS');
 	}
-
-	return generateToken(user);
+	return new AppError(message, 400, 'AUTH_ERROR');
 };
 
-const generateToken = (user: IUser) => {
-	const expiresIn = '2d';
-	const token = jwt.sign({ id: user._id, role: user.role }, JWT_SECRET, {
-		expiresIn,
+export const registerUser = async (input: unknown) => {
+	const data = registerSchema.parse(input);
+	const existingProfile = await prisma.profile.findUnique({
+		where: { email: data.email },
+		select: { id: true },
 	});
 
-	// Calculate expiry timestamp
-	const expiryTime = new Date();
-	expiryTime.setDate(expiryTime.getDate() + 2); // 1 day from now
+	if (existingProfile) {
+		throw new AppError('Email is already registered.', 409, 'EMAIL_TAKEN');
+	}
+
+	const { data: authData, error } = await createSupabaseClient().auth.signUp({
+		email: data.email,
+		password: data.password,
+		options: {
+			emailRedirectTo: `${frontendUrl()}/verify-email`,
+			data: { name: data.name },
+		},
+	});
+
+	if (error) throw authError(error.message);
+	if (!authData.user) throw new AppError('Unable to create account.', 502);
+
+	const profile = await prisma.profile.create({
+		data: {
+			id: authData.user.id,
+			email: data.email,
+			name: data.name,
+			role: data.role === 'creator' ? UserRole.CREATOR : UserRole.EVENTEE,
+		},
+	});
 
 	return {
-		user: { id: user._id, name: user.name, email: user.email, role: user.role },
-		token,
-		expiresAt: expiryTime.toISOString(),
+		message: 'Registration successful. Check your email to confirm your account.',
+		user: {
+			id: profile.id,
+			name: profile.name,
+			email: profile.email,
+			role: toApiRole(profile.role),
+		},
 	};
+};
+
+export const loginUser = async (input: unknown) => {
+	const data = loginSchema.parse(input);
+	const { data: authData, error } =
+		await createSupabaseClient().auth.signInWithPassword(data);
+
+	if (error) throw authError(error.message);
+	if (!authData.session || !authData.user.email) {
+		throw new AppError('Unable to create a session.', 502);
+	}
+
+	const profile = await prisma.profile.findUnique({
+		where: { id: authData.user.id },
+	});
+	if (!profile) {
+		throw new AppError('Account profile is missing.', 403, 'PROFILE_MISSING');
+	}
+
+	return {
+		user: {
+			id: profile.id,
+			name: profile.name,
+			email: profile.email,
+			role: toApiRole(profile.role),
+		},
+		token: authData.session.access_token,
+		refreshToken: authData.session.refresh_token,
+		expiresAt: authData.session.expires_at
+			? new Date(authData.session.expires_at * 1000).toISOString()
+			: null,
+	};
+};
+
+export const refreshSession = async (input: unknown) => {
+	const { refreshToken } = z
+		.object({ refreshToken: z.string().min(1) })
+		.parse(input);
+	const { data, error } = await createSupabaseClient().auth.refreshSession({
+		refresh_token: refreshToken,
+	});
+
+	if (error || !data.session) {
+		throw new AppError('Invalid or expired refresh token.', 401, 'INVALID_REFRESH');
+	}
+
+	return {
+		token: data.session.access_token,
+		refreshToken: data.session.refresh_token,
+		expiresAt: data.session.expires_at
+			? new Date(data.session.expires_at * 1000).toISOString()
+			: null,
+	};
+};
+
+export const resendVerification = async (input: unknown) => {
+	const { email } = z
+		.object({ email: z.email().transform((value) => value.toLowerCase()) })
+		.parse(input);
+	const { error } = await createSupabaseClient().auth.resend({
+		type: 'signup',
+		email,
+		options: { emailRedirectTo: `${frontendUrl()}/verify-email` },
+	});
+
+	if (error) throw authError(error.message);
+	return { message: 'If the account exists, a confirmation email has been sent.' };
 };

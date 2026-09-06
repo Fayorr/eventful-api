@@ -1,58 +1,60 @@
-import mongoose from 'mongoose';
-import Ticket from '../tickets/ticket.model';
-import Event from '../events/event.model';
+import { PaymentStatus } from '@prisma/client';
+import prisma from '../../config/prisma';
+import { AppError } from '../../shared/errors/AppError';
 
 export const getCreatorAnalytics = async (creatorId: string) => {
-	const objectId = new mongoose.Types.ObjectId(creatorId);
-
-	// 1. Get all events created by this user to filter tickets
-	const creatorEvents = await Event.find({ creator: objectId }).select('_id');
-	const eventIds = creatorEvents.map((e) => e._id);
-
-	// 2. Aggregate all-time stats
-	const allTimeStats = await Ticket.aggregate([
-		{ $match: { event: { $in: eventIds } } },
-		{
-			$group: {
-				_id: null,
-				totalTicketsSold: { $sum: 1 },
-				totalAttendees: { $sum: { $cond: ['$isScanned', 1, 0] } }, // Count only if isScanned is true
-			},
-		},
-	]);
-
-	return allTimeStats.length > 0
-		? {
-				totalTicketsSold: allTimeStats[0].totalTicketsSold,
-				totalAttendees: allTimeStats[0].totalAttendees,
-			}
-		: { totalTicketsSold: 0, totalAttendees: 0 };
+	const eventFilter = { event: { creatorId } };
+	const [totalEvents, totalTicketsSold, totalAttendees, revenue] =
+		await prisma.$transaction([
+			prisma.event.count({ where: { creatorId } }),
+			prisma.ticket.count({ where: eventFilter }),
+			prisma.ticket.count({ where: { ...eventFilter, scannedAt: { not: null } } }),
+			prisma.payment.aggregate({
+				where: { ...eventFilter, status: PaymentStatus.PAID },
+				_sum: { amountKobo: true },
+			}),
+		]);
+	const totalRevenueKobo = revenue._sum.amountKobo ?? 0;
+	return {
+		totalEvents,
+		totalTicketsSold,
+		totalAttendees,
+		attendanceRate:
+			totalTicketsSold === 0 ? 0 : totalAttendees / totalTicketsSold,
+		totalRevenueKobo,
+		totalRevenue: totalRevenueKobo / 100,
+		currency: 'NGN',
+	};
 };
 
 export const getEventSpecificAnalytics = async (
 	eventId: string,
 	creatorId: string,
 ) => {
-	// Ensure the event belongs to the creator requesting the analytics
-	const event = await Event.findOne({ _id: eventId, creator: creatorId });
-	if (!event) throw new Error('Event not found or unauthorized');
+	const event = await prisma.event.findFirst({
+		where: { id: eventId, creatorId },
+		select: { id: true, title: true, capacity: true },
+	});
+	if (!event) throw new AppError('Event not found or not owned by you.', 404);
 
-	const stats = await Ticket.aggregate([
-		{ $match: { event: new mongoose.Types.ObjectId(eventId) } },
-		{
-			$group: {
-				_id: '$event',
-				totalTicketsSold: { $sum: 1 },
-				totalAttendees: { $sum: { $cond: ['$isScanned', 1, 0] } },
-			},
-		},
+	const [totalTicketsSold, totalAttendees, revenue] = await prisma.$transaction([
+		prisma.ticket.count({ where: { eventId } }),
+		prisma.ticket.count({ where: { eventId, scannedAt: { not: null } } }),
+		prisma.payment.aggregate({
+			where: { eventId, status: PaymentStatus.PAID },
+			_sum: { amountKobo: true },
+		}),
 	]);
-
-	return stats.length > 0
-		? {
-				event: event.title,
-				totalTicketsSold: stats[0].totalTicketsSold,
-				totalAttendees: stats[0].totalAttendees,
-			}
-		: { event: event.title, totalTicketsSold: 0, totalAttendees: 0 };
+	const totalRevenueKobo = revenue._sum.amountKobo ?? 0;
+	return {
+		event,
+		totalTicketsSold,
+		totalAttendees,
+		attendanceRate:
+			totalTicketsSold === 0 ? 0 : totalAttendees / totalTicketsSold,
+		capacityUsed: event.capacity === 0 ? 0 : totalTicketsSold / event.capacity,
+		totalRevenueKobo,
+		totalRevenue: totalRevenueKobo / 100,
+		currency: 'NGN',
+	};
 };

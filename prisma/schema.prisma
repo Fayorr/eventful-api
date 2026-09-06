@@ -1,0 +1,137 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  CREATOR @map("creator")
+  EVENTEE @map("eventee")
+
+  @@map("user_role")
+}
+
+enum PaymentStatus {
+  PENDING  @map("pending")
+  PAID     @map("paid")
+  FAILED   @map("failed")
+  REFUNDED @map("refunded")
+
+  @@map("payment_status")
+}
+
+enum ReminderStatus {
+  SCHEDULED @map("scheduled")
+  SENT      @map("sent")
+  CANCELLED @map("cancelled")
+  FAILED    @map("failed")
+
+  @@map("reminder_status")
+}
+
+model Profile {
+  id        String   @id @db.Uuid
+  email     String   @unique
+  name      String
+  role      UserRole @default(EVENTEE)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  createdEvents Event[]    @relation("EventCreator")
+  tickets       Ticket[]   @relation("TicketEventee")
+  payments      Payment[]
+  reminders     Reminder[]
+
+  @@map("profiles")
+}
+
+model Event {
+  id          String   @id @default(uuid()) @db.Uuid
+  title       String   @db.VarChar(160)
+  description String
+  date        DateTime @db.Timestamptz(6)
+  location    String   @db.VarChar(240)
+  priceKobo   Int      @default(0) @map("price_kobo")
+  capacity    Int
+  ticketsSold Int      @default(0) @map("tickets_sold")
+  creatorId   String   @map("creator_id") @db.Uuid
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  creator   Profile    @relation("EventCreator", fields: [creatorId], references: [id], onDelete: Cascade)
+  tickets   Ticket[]
+  payments  Payment[]
+  reminders Reminder[]
+
+  @@index([date])
+  @@index([creatorId, date])
+  @@map("events")
+}
+
+model Payment {
+  id           String        @id @default(uuid()) @db.Uuid
+  reference    String        @unique @db.VarChar(120)
+  provider     String        @default("paystack") @db.VarChar(32)
+  status       PaymentStatus @default(PENDING)
+  amountKobo   Int           @map("amount_kobo")
+  currency     String        @default("NGN") @db.Char(3)
+  eventId      String        @map("event_id") @db.Uuid
+  eventeeId    String        @map("eventee_id") @db.Uuid
+  paidAt       DateTime?     @map("paid_at") @db.Timestamptz(6)
+  providerData Json?         @map("provider_data")
+  createdAt    DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt    DateTime      @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  event   Event   @relation(fields: [eventId], references: [id], onDelete: Restrict)
+  eventee Profile @relation(fields: [eventeeId], references: [id], onDelete: Restrict)
+  ticket  Ticket?
+
+  @@index([eventId, status])
+  @@index([eventeeId, createdAt])
+  @@map("payments")
+}
+
+model Ticket {
+  id          String    @id @default(uuid()) @db.Uuid
+  qrTokenHash String    @unique @map("qr_token_hash") @db.Char(64)
+  qrCodeUrl   String    @map("qr_code_url")
+  eventId     String    @map("event_id") @db.Uuid
+  eventeeId   String    @map("eventee_id") @db.Uuid
+  paymentId   String?   @unique @map("payment_id") @db.Uuid
+  scannedAt   DateTime? @map("scanned_at") @db.Timestamptz(6)
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  event     Event      @relation(fields: [eventId], references: [id], onDelete: Restrict)
+  eventee   Profile    @relation("TicketEventee", fields: [eventeeId], references: [id], onDelete: Restrict)
+  payment   Payment?   @relation(fields: [paymentId], references: [id], onDelete: Restrict)
+  reminders Reminder[]
+
+  @@unique([eventId, eventeeId])
+  @@index([eventeeId, createdAt])
+  @@map("tickets")
+}
+
+model Reminder {
+  id           String         @id @default(uuid()) @db.Uuid
+  eventId      String         @map("event_id") @db.Uuid
+  userId       String         @map("user_id") @db.Uuid
+  ticketId     String?        @map("ticket_id") @db.Uuid
+  scheduledFor DateTime       @map("scheduled_for") @db.Timestamptz(6)
+  status       ReminderStatus @default(SCHEDULED)
+  jobId        String?        @unique @map("job_id")
+  sentAt       DateTime?      @map("sent_at") @db.Timestamptz(6)
+  createdAt    DateTime       @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt    DateTime       @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  event  Event   @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  user   Profile @relation(fields: [userId], references: [id], onDelete: Cascade)
+  ticket Ticket? @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+
+  @@unique([eventId, userId, scheduledFor])
+  @@index([status, scheduledFor])
+  @@map("reminders")
+}

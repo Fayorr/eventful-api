@@ -1,6 +1,5 @@
 # Dependencies
 node_modules/
-package-lock.json
 yarn.lock
 
 # Environment variables
@@ -24,6 +23,7 @@ build/
 # Testing
 coverage/
 .nyc_output/
+tests/*.test.js
 
 # Logs
 logs/
