@@ -3,17 +3,19 @@
 	"version": "2.0.0",
 	"description": "AltSchool Backend Engineering Capstone - Eventful",
 	"main": "dist/server.js",
+	"engines": {
+		"node": ">=22.0.0"
+	},
 	"scripts": {
 		"start": "node dist/server.js",
 		"dev": "ts-node-dev --respawn --transpile-only src/server.ts",
 		"worker": "node dist/worker.js",
 		"worker:dev": "ts-node-dev --respawn --transpile-only src/worker.ts",
-		"build": "tsc",
+		"build": "prisma generate && tsc",
 		"test": "jest --runInBand",
 		"db:generate": "prisma generate",
 		"db:validate": "prisma validate",
-		"db:studio": "prisma studio",
-		"postinstall": "prisma generate"
+		"db:studio": "prisma studio"
 	},
 	"dependencies": {
 		"@prisma/client": "6.19.3",
