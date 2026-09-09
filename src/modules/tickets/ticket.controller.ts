@@ -9,6 +9,7 @@ export const buyTicket = async (req: AuthRequest, res: Response) => {
 	const data = await ticketService.initializeTicketPurchase(
 		param(req.params.eventId),
 		req.user!,
+		req.body.callbackUrl,
 	);
 	res.status(data.kind === 'ticket' ? 201 : 200).json({ status: 'success', data });
 };

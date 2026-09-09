@@ -53,6 +53,52 @@ describe('ticket payment safety', () => {
 		expect(initializePayment.mock.calls[0][1]).toBe(250000);
 	});
 
+	it('returns the buyer to the frontend origin that started checkout', async () => {
+		prisma.event.findUnique.mockResolvedValue({
+			id: '2f10c346-d889-441b-a7d8-0cfad56f2054',
+			date: new Date(Date.now() + 86_400_000),
+			priceKobo: 250000,
+			ticketsSold: 0,
+			capacity: 20,
+		});
+		prisma.ticket.findUnique.mockResolvedValue(null);
+		prisma.payment.create.mockResolvedValue({ id: 'payment-id' });
+		initializePayment.mockResolvedValue({
+			authorization_url: 'https://paystack.test',
+			reference: 'EVT_reference',
+		});
+
+		await initializeTicketPurchase(
+			'2f10c346-d889-441b-a7d8-0cfad56f2054',
+			{ id: 'user-id', email: 'user@test.com' },
+			'http://localhost:5173/payment/verify?ignored=1',
+		);
+
+		expect(initializePayment.mock.calls[0][4]).toBe(
+			'http://localhost:5173/payment/verify',
+		);
+	});
+
+	it('rejects an untrusted payment return URL', async () => {
+		prisma.event.findUnique.mockResolvedValue({
+			id: '2f10c346-d889-441b-a7d8-0cfad56f2054',
+			date: new Date(Date.now() + 86_400_000),
+			priceKobo: 250000,
+			ticketsSold: 0,
+			capacity: 20,
+		});
+		prisma.ticket.findUnique.mockResolvedValue(null);
+
+		await expect(
+			initializeTicketPurchase(
+				'2f10c346-d889-441b-a7d8-0cfad56f2054',
+				{ id: 'user-id', email: 'user@test.com' },
+				'https://attacker.example/payment/verify',
+			),
+		).rejects.toMatchObject({ code: 'PAYMENT_CALLBACK_NOT_ALLOWED' });
+		expect(prisma.payment.create).not.toHaveBeenCalled();
+	});
+
 	it('rejects a successful-looking payment with the wrong amount', async () => {
 		prisma.payment.findUnique.mockResolvedValue({
 			id: 'payment-id',

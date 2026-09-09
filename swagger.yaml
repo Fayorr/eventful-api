@@ -159,6 +159,17 @@ paths:
       security: [{ bearerAuth: [] }]
       parameters:
         - { in: path, name: eventId, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                callbackUrl:
+                  type: string
+                  format: uri
+                  description: Allowed frontend URL that should receive the Paystack return.
       responses:
         '200': { description: Paystack checkout initialized }
         '201': { description: Free ticket issued }

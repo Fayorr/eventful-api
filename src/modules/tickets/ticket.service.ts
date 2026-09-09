@@ -3,13 +3,51 @@ import { PaymentStatus, Prisma } from '@prisma/client';
 import { z } from 'zod';
 import prisma from '../../config/prisma';
 import { paystack, PaystackVerification } from '../../config/paystack';
-import { FRONTEND_URL } from '../../config/urls';
+import { CORS_ORIGINS, FRONTEND_URL } from '../../config/urls';
 import { AppError } from '../../shared/errors/AppError';
 import { generateQRCode } from '../../shared/utils/qrGenerator';
 import { scheduleReminder } from '../notifications/queue.service';
 import { presentEvent } from '../events/event.service';
 
 const uuid = z.uuid();
+const localCallbackOrigins = new Set([
+	'http://localhost:5173',
+	'http://127.0.0.1:5173',
+]);
+
+const resolvePaymentCallbackUrl = (requestedCallbackUrl?: unknown) => {
+	if (requestedCallbackUrl === undefined) {
+		return `${FRONTEND_URL}/payment/verify`;
+	}
+	if (typeof requestedCallbackUrl !== 'string') {
+		throw new AppError(
+			'Invalid payment return URL.',
+			400,
+			'PAYMENT_CALLBACK_INVALID',
+		);
+	}
+
+	let origin: string;
+	try {
+		origin = new URL(requestedCallbackUrl).origin.replace(/\/$/, '');
+	} catch {
+		throw new AppError(
+			'Invalid payment return URL.',
+			400,
+			'PAYMENT_CALLBACK_INVALID',
+		);
+	}
+
+	if (!CORS_ORIGINS.includes(origin) && !localCallbackOrigins.has(origin)) {
+		throw new AppError(
+			'Payment return URL is not allowed.',
+			400,
+			'PAYMENT_CALLBACK_NOT_ALLOWED',
+		);
+	}
+
+	return `${origin}/payment/verify`;
+};
 
 const publicTicket = <T extends { qrTokenHash: string }>(ticket: T) => {
 	const { qrTokenHash: _secret, ...safeTicket } = ticket;
@@ -87,6 +125,7 @@ const issueTicket = async (
 export const initializeTicketPurchase = async (
 	eventIdInput: string,
 	user: { id: string; email: string },
+	requestedCallbackUrl?: unknown,
 ) => {
 	const eventId = uuid.parse(eventIdInput);
 	const event = await prisma.event.findUnique({ where: { id: eventId } });
@@ -106,6 +145,7 @@ export const initializeTicketPurchase = async (
 		return { kind: 'ticket' as const, ticket: await issueTicket(eventId, user.id) };
 	}
 
+	const callbackUrl = resolvePaymentCallbackUrl(requestedCallbackUrl);
 	const reference = `EVT_${crypto.randomUUID().replace(/-/g, '')}`;
 	const payment = await prisma.payment.create({
 		data: {
@@ -115,8 +155,6 @@ export const initializeTicketPurchase = async (
 			eventeeId: user.id,
 		},
 	});
-	const callbackUrl = `${FRONTEND_URL}/payment/verify`;
-
 	try {
 		const initialized = await paystack.initializePayment(
 			user.email,
