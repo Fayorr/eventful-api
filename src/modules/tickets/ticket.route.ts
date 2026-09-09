@@ -1,27 +1,35 @@
 import { Router } from 'express';
 import {
 	buyTicket,
-	scanTicket,
-	verifyPayment,
-	setPersonalReminder,
 	getMyTickets,
+	scanTicket,
+	setPersonalReminder,
+	verifyPayment,
 } from './ticket.controller';
 import { authorize, protect } from '../../shared/middlewares/auth.middleware';
+import { catchAsync } from '../../shared/utils/catchAsync';
 
 const router = Router();
 
-// Only logged in users can buy tickets
-router.post('/buy/:eventId', protect, buyTicket);
-
-// Route to hit after Paystack redirects back to your frontend
-router.get('/verify/:reference', protect, verifyPayment);
-
-// Add scanTicket to your imports, then add this route:
-router.post('/scan/:reference', protect, authorize('creator'), scanTicket);
-
-router.post('/:ticketId/reminder', protect, setPersonalReminder);
-
-
-router.get('/my-tickets', protect, getMyTickets);
+router.get('/my-tickets', protect, authorize('eventee'), catchAsync(getMyTickets));
+router.post('/buy/:eventId', protect, authorize('eventee'), catchAsync(buyTicket));
+router.post(
+	'/verify/:reference',
+	protect,
+	authorize('eventee'),
+	catchAsync(verifyPayment),
+);
+router.post(
+	'/scan/:token',
+	protect,
+	authorize('creator'),
+	catchAsync(scanTicket),
+);
+router.post(
+	'/:ticketId/reminder',
+	protect,
+	authorize('eventee'),
+	catchAsync(setPersonalReminder),
+);
 
 export default router;

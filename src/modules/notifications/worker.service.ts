@@ -1,29 +1,38 @@
-// src/modules/notifications/worker.service.ts
+import { ReminderStatus } from '@prisma/client';
 import { Worker } from 'bullmq';
-import dotenv from 'dotenv';
+import prisma from '../../config/prisma';
 import { createBullMQConnection } from '../../config/redis';
 import { sendEventReminderEmail } from './email.service';
-
-dotenv.config();
-
-// Parse Redis URL for BullMQ connection
-const redisUrl = process.env.REDIS_URL || 'redis://localhost:6379';
-const url = new URL(redisUrl);
-const redisHost = url.hostname || 'localhost';
-const redisPort = parseInt(url.port || '6379', 10);
-const redisPassword = url.password || undefined;
 
 export const reminderWorker = new Worker(
 	'event-reminders',
 	async (job) => {
-		const { email, eventTitle } = job.data;
-
-		console.log(`[BullMQ Worker] Processing reminder for: ${email}`);
-
-		// Fire the email!
+		const { reminderId, email, eventTitle } = job.data as {
+			reminderId: string;
+			email: string;
+			eventTitle: string;
+		};
 		await sendEventReminderEmail(email, eventTitle);
+		await prisma.reminder.update({
+			where: { id: reminderId },
+			data: { status: ReminderStatus.SENT, sentAt: new Date() },
+		});
 	},
-	{
-		connection: createBullMQConnection(),
-	},
+	{ connection: createBullMQConnection(), concurrency: 10 },
 );
+
+reminderWorker.on('failed', async (job) => {
+	const reminderId = job?.data?.reminderId as string | undefined;
+	if (
+		reminderId &&
+		job &&
+		job.attemptsMade >= (job.opts.attempts ?? 1)
+	) {
+		await prisma.reminder
+			.update({
+				where: { id: reminderId },
+				data: { status: ReminderStatus.FAILED },
+			})
+			.catch((error) => console.error('Failed to mark reminder failed:', error));
+	}
+});

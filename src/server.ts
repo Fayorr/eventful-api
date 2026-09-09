@@ -1,29 +1,29 @@
-import dotenv from 'dotenv';
-import connectDB from './config/db';
-import { connectRedis } from './config/redis';
+import 'dotenv/config';
+import app from './app';
+import { connectDatabase, disconnectDatabase } from './config/prisma';
+import { connectRedis, disconnectRedis } from './config/redis';
 
-dotenv.config();
-
-const PORT = process.env.PORT || 5001;
+const port = Number(process.env.PORT || 5001);
 
 const startServer = async () => {
-	try {
-		// 1. Connect to Infrastructure FIRST
-		await connectDB();
-		await connectRedis();
+	await Promise.all([connectDatabase(), connectRedis()]);
+	const server = app.listen(port, () => {
+		console.log(`🚀 Eventful API v2 running on port ${port}`);
+	});
 
-		// 2. Import the Express app ONLY AFTER Redis is fully connected.
-		// We use 'require' here to dynamically load it at runtime instead of at the top of the file.
-		const app = require('./app').default;
-
-		// 3. Start listening for traffic
-		app.listen(PORT, () => {
-			console.log(`🚀 Server running on port ${PORT}`);
+	const shutdown = async (signal: string) => {
+		console.log(`${signal} received; shutting down`);
+		server.close(async () => {
+			await Promise.all([disconnectDatabase(), disconnectRedis()]);
+			process.exit(0);
 		});
-	} catch (error) {
-		console.error('❌ Error starting server:', error);
-		process.exit(1);
-	}
+	};
+
+	process.on('SIGTERM', () => void shutdown('SIGTERM'));
+	process.on('SIGINT', () => void shutdown('SIGINT'));
 };
 
-startServer();
+startServer().catch((error) => {
+	console.error('❌ Failed to start Eventful API:', error);
+	process.exit(1);
+});

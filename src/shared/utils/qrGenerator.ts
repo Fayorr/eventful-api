@@ -11,7 +11,7 @@ export const generateQRCode = async (payload: string): Promise<string> => {
 			folder: 'eventful_tickets', // Creates a clean folder in your Cloudinary account
 		});
 
-		// 3. Return the secure URL so ticket.service.ts can save it to MongoDB
+		// 3. Return the secure URL so the ticket record can reference it
 		return uploadResponse.secure_url;
 	} catch (error) {
 		console.error('Cloudinary QR Upload Error:', error);

@@ -1,27 +1,39 @@
-openapi: 3.0.0
+openapi: 3.0.3
 info:
   title: Eventful API
-  description: AltSchool Backend Engineering Capstone Project
-  version: 1.0.0
+  version: 2.0.0
+  description: PostgreSQL and Supabase Auth edition of the Eventful ticketing API.
 servers:
-  - url: https://eventful-api.hostless.app/api/v1
-    description: Production Server
-  - url: http://localhost:5001/api/v1
-    description: Local Development Server
-
+  - url: https://eventful-api.hostless.app/api/v2
+    description: Production
+  - url: http://localhost:5001/api/v2
+    description: Local development
 components:
   securitySchemes:
     bearerAuth:
       type: http
       scheme: bearer
       bearerFormat: JWT
-
+  schemas:
+    EventInput:
+      type: object
+      required: [title, description, date, location, price, capacity]
+      properties:
+        title: { type: string, maxLength: 160 }
+        description: { type: string }
+        date: { type: string, format: date-time }
+        location: { type: string, maxLength: 240 }
+        price: { type: number, minimum: 0, description: Price in naira }
+        capacity: { type: integer, minimum: 1 }
+        reminderHoursBefore:
+          type: array
+          maxItems: 5
+          items: { type: number, minimum: 0, exclusiveMinimum: true }
 paths:
-  # ================= AUTHENTICATION =================
   /auth/register:
     post:
-      summary: Register a new user
       tags: [Authentication]
+      summary: Register and send a confirmation email
       requestBody:
         required: true
         content:
@@ -31,17 +43,16 @@ paths:
               required: [name, email, password]
               properties:
                 name: { type: string }
-                email: { type: string }
-                password: { type: string }
-                role: { type: string, enum: [creator, eventee] }
+                email: { type: string, format: email }
+                password: { type: string, minLength: 8 }
+                role: { type: string, enum: [creator, eventee], default: eventee }
       responses:
-        '201': { description: User registered successfully (Returns verification message, requires email verification to login) }
-        '400': { description: Bad Request }
-
+        '201': { description: Confirmation email sent; no login token is returned }
+        '409': { description: Email already registered }
   /auth/login:
     post:
-      summary: Login a user
       tags: [Authentication]
+      summary: Login after email confirmation
       requestBody:
         required: true
         content:
@@ -50,181 +61,183 @@ paths:
               type: object
               required: [email, password]
               properties:
-                email: { type: string }
+                email: { type: string, format: email }
                 password: { type: string }
       responses:
-        '200': { description: Login successful }
-        '401': { description: Invalid credentials }
-
-  /auth/verify-email/{token}:
-    get:
-      summary: Verify a user's email address via token
+        '200': { description: Access and refresh tokens returned }
+        '403': { description: Email has not been confirmed }
+  /auth/refresh:
+    post:
       tags: [Authentication]
-      parameters:
-        - in: path
-          name: token
-          required: true
-          schema: { type: string }
+      summary: Refresh an access token
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [refreshToken]
+              properties:
+                refreshToken: { type: string }
       responses:
-        '200': { description: Email verified successfully }
-        '400': { description: Invalid or expired verification token }
-
-  # ================= EVENTS =================
+        '200': { description: Session refreshed }
+  /auth/resend-verification:
+    post:
+      tags: [Authentication]
+      summary: Resend a signup confirmation email
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email]
+              properties:
+                email: { type: string, format: email }
+      responses:
+        '200': { description: Non-enumerating response returned }
   /events:
     get:
-      summary: Get all events (Cached)
       tags: [Events]
+      summary: Browse paginated events (Redis cached)
+      parameters:
+        - { in: query, name: page, schema: { type: integer, minimum: 1 } }
+        - { in: query, name: limit, schema: { type: integer, minimum: 1, maximum: 100 } }
+        - { in: query, name: search, schema: { type: string } }
+        - { in: query, name: upcoming, schema: { type: boolean, default: true } }
       responses:
-        '200': { description: A list of events }
-          
+        '200': { description: Paginated events }
     post:
-      summary: Create a new event
       tags: [Events]
+      summary: Create an event and optional creator reminders
       security: [{ bearerAuth: [] }]
       requestBody:
         required: true
         content:
           application/json:
-            schema:
-              type: object
-              properties:
-                title: { type: string }
-                description: { type: string }
-                date: { type: string, format: date-time }
-                location: { type: string }
-                price: { type: number }
-                capacity: { type: number }
+            schema: { $ref: '#/components/schemas/EventInput' }
       responses:
-        '201': { description: Event created successfully }
-        '403': { description: Forbidden (Not a creator) }
-
+        '201': { description: Event created }
+        '403': { description: Creator role required }
+  /events/mine:
+    get:
+      tags: [Events]
+      summary: List events owned by the creator
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200': { description: Creator events }
   /events/{id}:
     get:
-      summary: Get a specific event by ID
       tags: [Events]
+      summary: Get an event
       parameters:
-        - in: path
-          name: id
-          required: true
-          schema: { type: string }
+        - { in: path, name: id, required: true, schema: { type: string, format: uuid } }
       responses:
-        '200': { description: Event details }
+        '200': { description: Event }
         '404': { description: Event not found }
-
   /events/{id}/share:
     get:
-      summary: Get social share links for an event
       tags: [Events]
+      summary: Generate social share links
       parameters:
-        - in: path
-          name: id
-          required: true
-          schema: { type: string }
+        - { in: path, name: id, required: true, schema: { type: string, format: uuid } }
       responses:
-        '200': { description: Share links generated }
-
-  # ================= TICKETS & PAYMENTS =================
-  /tickets/my-tickets:
+        '200': { description: Share links }
+  /events/{id}/attendees:
     get:
-      summary: Get all tickets purchased by the authenticated attendee
-      tags: [Tickets]
+      tags: [Events]
+      summary: List an owned event's attendees and scan status
       security: [{ bearerAuth: [] }]
+      parameters:
+        - { in: path, name: id, required: true, schema: { type: string, format: uuid } }
       responses:
-        '200': { description: List of tickets populated with event details }
-        '401': { description: Unauthorized (Missing or invalid token) }
-
+        '200': { description: Attendees }
   /tickets/buy/{eventId}:
     post:
-      summary: Initialize ticket purchase (Paystack)
       tags: [Tickets]
+      summary: Issue a free ticket or initialize Paystack
       security: [{ bearerAuth: [] }]
       parameters:
-        - in: path
-          name: eventId
-          required: true
-          schema: { type: string }
+        - { in: path, name: eventId, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                callbackUrl:
+                  type: string
+                  format: uri
+                  description: Allowed frontend URL that should receive the Paystack return.
       responses:
-        '200': { description: Payment initialized (Returns Paystack URL) }
-        '400': { description: Event sold out or invalid }
-
+        '200': { description: Paystack checkout initialized }
+        '201': { description: Free ticket issued }
+        '409': { description: Sold out or ticket already owned }
   /tickets/verify/{reference}:
-    get:
-      summary: Verify Paystack payment & Generate QR Code Ticket
-      tags: [Tickets]
-      security: [{ bearerAuth: [] }]
-      parameters:
-        - in: path
-          name: reference
-          required: true
-          schema: { type: string }
-      responses:
-        '201': { description: Ticket and QR Code generated }
-        '400': { description: Payment verification failed }
-
-  /tickets/scan/{reference}:
     post:
-      summary: Scan and validate an attendee's ticket
       tags: [Tickets]
+      summary: Verify amount, currency, owner, and issue a paid ticket
       security: [{ bearerAuth: [] }]
       parameters:
-        - in: path
-          name: reference
-          required: true
-          schema: { type: string }
+        - { in: path, name: reference, required: true, schema: { type: string } }
       responses:
-        '200': { description: Ticket verified and attendee admitted }
-        '400': { description: Invalid scan or ticket already used }
-        '403': { description: Unauthorized (Not the event creator) }
-
+        '201': { description: Ticket issued idempotently }
+  /tickets/scan/{token}:
+    post:
+      tags: [Tickets]
+      summary: Admit an attendee using the opaque QR token
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { in: path, name: token, required: true, schema: { type: string } }
+      responses:
+        '200': { description: Ticket admitted exactly once }
+        '409': { description: Ticket was already scanned }
+  /tickets/my-tickets:
+    get:
+      tags: [Tickets]
+      summary: List the eventee's tickets
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200': { description: Tickets }
   /tickets/{ticketId}/reminder:
     post:
-      summary: Set a personal email reminder for an event
-      tags: [Tickets]
+      tags: [Notifications]
+      summary: Schedule a personal reminder
       security: [{ bearerAuth: [] }]
       parameters:
-        - in: path
-          name: ticketId
-          required: true
-          schema: { type: string }
+        - { in: path, name: ticketId, required: true, schema: { type: string, format: uuid } }
       requestBody:
         required: true
         content:
           application/json:
             schema:
               type: object
+              required: [hoursBefore]
               properties:
-                delayInHours: { type: number }
+                hoursBefore: { type: number, exclusiveMinimum: 0 }
       responses:
-        '200': { description: Reminder scheduled successfully }
-        '400': { description: Invalid ticket or time already passed }
-
+        '201': { description: Reminder persisted and queued }
   /payments/history:
     get:
-      summary: Get creator payment and revenue history
       tags: [Payments]
+      summary: Get the creator's paid transaction ledger
       security: [{ bearerAuth: [] }]
       responses:
-        '200': { description: Payment ledger retrieved }
-        '403': { description: Forbidden }
-
-  # ================= ANALYTICS =================
+        '200': { description: Payment ledger }
   /analytics/global:
     get:
-      summary: Get all-time analytics for a creator
       tags: [Analytics]
+      summary: Get all-time creator metrics
       security: [{ bearerAuth: [] }]
       responses:
-        '200': { description: Global stats retrieved }
-
-  /analytics/event/{eventId}:
+        '200': { description: Ticket, attendance, and revenue metrics }
+  /analytics/events/{eventId}:
     get:
-      summary: Get analytics for a specific event
       tags: [Analytics]
+      summary: Get metrics for one owned event
       security: [{ bearerAuth: [] }]
       parameters:
-        - in: path
-          name: eventId
-          required: true
-          schema: { type: string }
+        - { in: path, name: eventId, required: true, schema: { type: string, format: uuid } }
       responses:
-        '200': { description: Event stats retrieved }
+        '200': { description: Per-event metrics }

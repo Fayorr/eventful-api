@@ -1,60 +1,43 @@
-import { Request, Response, NextFunction } from 'express';
+import { Prisma } from '@prisma/client';
+import { ErrorRequestHandler } from 'express';
+import { ZodError } from 'zod';
+import { AppError } from '../errors/AppError';
 
-// Extend the native Error interface to include common MongoDB/JWT properties
-export interface AppError extends Error {
-	statusCode?: number;
-	code?: number;
-	keyValue?: any;
-	errors?: any;
-}
+export const errorHandler: ErrorRequestHandler = (error, _req, res, _next) => {
+	let statusCode = 500;
+	let code = 'INTERNAL_ERROR';
+	let message = 'Something went wrong on the server.';
+	let details: unknown;
 
-export const errorHandler = (
-	err: AppError,
-	req: Request,
-	res: Response,
-	next: NextFunction,
-): void => {
-	let defaultError = {
-		statusCode: err.statusCode || 500,
-		message: err.message || 'Something went wrong on the server',
-	};
-
-	// 1. Mongoose Bad ObjectId (e.g., searching for an event with an invalid ID)
-	if (err.name === 'CastError') {
-		defaultError.statusCode = 400;
-		defaultError.message = 'Resource not found or invalid ID format';
+	if (error instanceof AppError) {
+		statusCode = error.statusCode;
+		code = error.code || 'APPLICATION_ERROR';
+		message = error.message;
+	} else if (error instanceof ZodError) {
+		statusCode = 400;
+		code = 'VALIDATION_ERROR';
+		message = 'The request contains invalid data.';
+		details = error.issues.map((issue) => ({
+			path: issue.path.join('.'),
+			message: issue.message,
+		}));
+	} else if (error instanceof Prisma.PrismaClientKnownRequestError) {
+		if (error.code === 'P2002') {
+			statusCode = 409;
+			code = 'DUPLICATE_RESOURCE';
+			message = 'This resource already exists.';
+		} else if (error.code === 'P2025') {
+			statusCode = 404;
+			code = 'RESOURCE_NOT_FOUND';
+			message = 'Resource not found.';
+		}
 	}
 
-	// 2. Mongoose Duplicate Key (e.g., registering an email that already exists)
-	if (err.code === 11000) {
-		defaultError.statusCode = 400;
-		const field = Object.keys(err.keyValue || {})[0];
-		defaultError.message = `${field} already exists. Please use another value.`;
-	}
-
-	// 3. Mongoose Validation Error (e.g., missing required fields)
-	if (err.name === 'ValidationError') {
-		defaultError.statusCode = 400;
-		const messages = Object.values(err.errors).map((val: any) => val.message);
-		defaultError.message = messages.join('. ');
-	}
-
-	// 4. JWT Errors
-	if (err.name === 'JsonWebTokenError') {
-		defaultError.statusCode = 401;
-		defaultError.message = 'Invalid token. Please log in again.';
-	}
-
-	if (err.name === 'TokenExpiredError') {
-		defaultError.statusCode = 401;
-		defaultError.message = 'Your token has expired. Please log in again.';
-	}
-
-	// Send the formatted error response
-	res.status(defaultError.statusCode).json({
+	if (statusCode >= 500) console.error(error);
+	res.status(statusCode).json({
 		status: 'error',
-		message: defaultError.message,
-		// Only show the detailed stack trace if running in development mode
-		stack: process.env.NODE_ENV !== 'production' ? err.stack : undefined,
+		code,
+		message,
+		...(details ? { details } : {}),
 	});
 };

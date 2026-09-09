@@ -1,60 +1,68 @@
-import dotenv from 'dotenv';
-
-dotenv.config();
-
-const PAYSTACK_SECRET_KEY =
-	process.env.PAYSTACK_SECRET || (process.env.PAYSTACK_SECRET_KEY as string);
 const PAYSTACK_BASE_URL = 'https://api.paystack.co';
 
+const secretKey = () => {
+	const value = process.env.PAYSTACK_SECRET_KEY || process.env.PAYSTACK_SECRET;
+	if (!value) throw new Error('PAYSTACK_SECRET_KEY is not configured');
+	return value;
+};
+
+const request = async <T>(path: string, init?: RequestInit): Promise<T> => {
+	const response = await fetch(`${PAYSTACK_BASE_URL}${path}`, {
+		...init,
+		headers: {
+			Authorization: `Bearer ${secretKey()}`,
+			'Content-Type': 'application/json',
+			...init?.headers,
+		},
+	});
+	const body = (await response.json()) as {
+		status: boolean;
+		message?: string;
+		data?: T;
+	};
+	if (!response.ok || !body.status || !body.data) {
+		throw new Error(body.message || 'Paystack request failed');
+	}
+	return body.data;
+};
+
+export interface PaystackVerification {
+	status: string;
+	reference: string;
+	amount: number;
+	currency: string;
+	paid_at?: string;
+	metadata?: Record<string, unknown>;
+	[key: string]: unknown;
+}
+
 export const paystack = {
-	/**
-	 * Initializes a transaction with Paystack
-	 */
-	async initializePayment(email: string, amount: number, metadata: any, callback_url: string) {
-		if (!PAYSTACK_SECRET_KEY) {
-			throw new Error('Paystack secret key is not configured');
-		}
-
-		const response = await fetch(
-			`${PAYSTACK_BASE_URL}/transaction/initialize`,
-			{
-				method: 'POST',
-				headers: {
-					Authorization: `Bearer ${PAYSTACK_SECRET_KEY}`,
-					'Content-Type': 'application/json',
-				},
-				body: JSON.stringify({
-					email,
-					amount: amount * 100,
-					callback_url,
-					metadata,
-				}),
-			},
-		);
-
-		const data = await response.json();
-		if (!response.ok)
-			throw new Error(data.message || 'Payment initialization failed');
-		return data.data;
+	initializePayment(
+		email: string,
+		amountKobo: number,
+		reference: string,
+		metadata: Record<string, string>,
+		callbackUrl: string,
+	) {
+		return request<{
+			authorization_url: string;
+			access_code: string;
+			reference: string;
+		}>('/transaction/initialize', {
+			method: 'POST',
+			body: JSON.stringify({
+				email,
+				amount: amountKobo,
+				reference,
+				callback_url: callbackUrl,
+				metadata,
+			}),
+		});
 	},
 
-	/**
-	 * Verifies a transaction with Paystack
-	 */
-	async verifyPayment(reference: string) {
-		const response = await fetch(
-			`${PAYSTACK_BASE_URL}/transaction/verify/${reference}`,
-			{
-				method: 'GET',
-				headers: {
-					Authorization: `Bearer ${PAYSTACK_SECRET_KEY}`,
-				},
-			},
+	verifyPayment(reference: string) {
+		return request<PaystackVerification>(
+			`/transaction/verify/${encodeURIComponent(reference)}`,
 		);
-
-		const data = await response.json();
-		if (!response.ok)
-			throw new Error(data.message || 'Payment verification failed');
-		return data.data;
 	},
 };
